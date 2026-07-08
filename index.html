@@ -224,13 +224,13 @@ class Gauge{
     ctx.beginPath(); ctx.arc(cx,cy,S*0.018,0,7); ctx.fillStyle = cssVar('--hub'); ctx.fill();
 
     // chip digital (desenhado por cima do ponteiro de propósito — nunca fica "colado")
-    const chipW = S*0.34, chipH=S*0.10;
-    const chipY = cy + S*0.17;
+    const chipW = S*0.24, chipH=S*0.075;
+    const chipY = cy + S*0.19;
     ctx.fillStyle = tickColor;
-    roundRect(ctx, cx-chipW/2, chipY, chipW, chipH, S*0.015);
+    roundRect(ctx, cx-chipW/2, chipY, chipW, chipH, S*0.012);
     ctx.fill();
     // "fantasma" dos segmentos apagados (efeito visor LCD real)
-    ctx.font = `bold ${Math.round(S*0.08)}px DSEG7, monospace`;
+    ctx.font = `bold ${Math.round(S*0.06)}px DSEG7, monospace`;
     ctx.fillStyle = 'rgba(245,245,240,0.12)';
     ctx.fillText('88.8', cx, chipY + chipH/2 + S*0.002);
     // valor real
