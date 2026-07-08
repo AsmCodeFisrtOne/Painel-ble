@@ -8,18 +8,24 @@
 <meta name="theme-color" content="#1A1D21">
 <link rel="apple-touch-icon" href="icon.svg">
 <style>
+  @font-face{
+    font-family:'DSEG7';
+    src:url(data:font/woff2;base64,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) format('woff2');
+    font-weight:bold;
+    font-display:block;
+  }
   :root{
     --bg:            #101215;
     --panel:         #1A1D21;
-    --face:          #EDE8DE;
-    --tick:          #2B2E33;
+    --face:          #F7F6F2;
+    --tick:          #1A1A1C;
     --green:         #3C8A46;
     --yellow:        #E7B93C;
     --red:           #C23B22;
-    --needle:        #F5F5F0;
-    --needle-edge:   #14161A;
-    --hub:           #2B2E33;
-    --hub-ring:      #9A9C9F;
+    --needle:        #1A1A1C;
+    --needle-edge:   #F7F6F2;
+    --hub:           #1A1A1C;
+    --hub-ring:      #B7B4AC;
     --accent:        #3FA7A0;
     --text-dim:      #8A8F98;
   }
@@ -60,13 +66,301 @@
   .connect-btn:active{ transform:scale(0.97); }
 
   .gauges{
-    display:flex; flex-wrap:wrap; justify-content:center; gap:18px;
-    padding:22px 14px calc(30px + env(safe-area-inset-bottom)) 14px;
+    display:flex; flex-wrap:wrap; justify-content:center; gap:36px;
+    padding:36px 24px 48px 24px;
+    max-width:1400px;
+    margin:0 auto;
   }
   .gauge-card{
-    width:min(92vw, 380px);
+    width:clamp(320px, 34vw, 560px);
   }
   canvas{ width:100%; height:auto; display:block; }
 
   .footer-note{
-    text-align:center; color:var(--text-dim); font
+    text-align:center; color:var(--text-dim); font-size:13px;
+    padding:0 20px 28px; line-height:1.6;
+  }
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="brand">Painel BLE<small>Pressão &amp; Vazão</small></div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div class="status-pill"><span class="dot wait" id="statusDot"></span><span id="statusText">Iniciando</span></div>
+      <button class="connect-btn" id="connectBtn">Conectar</button>
+    </div>
+  </div>
+
+  <div class="gauges">
+    <div class="gauge-card"><canvas id="gaugePressao" width="720" height="720"></canvas></div>
+    <div class="gauge-card"><canvas id="gaugeVazao" width="720" height="720"></canvas></div>
+  </div>
+
+  <div class="footer-note">
+    Toque em <strong>Conectar</strong> para parear via Bluetooth com o dispositivo.<br>
+    Requer Chrome no Android e conexão HTTPS.
+  </div>
+
+<script>
+/* ============ CONFIG BLE (ajustar para bater com o firmware do ESP32) ============ */
+const SERVICE_UUID = 'a55d1a00-1000-4000-8000-00805f9b34fb';
+const CHAR_UUID    = 'a55d1a01-1000-4000-8000-00805f9b34fb';
+/* payload esperado na characteristic (8 bytes, little-endian):
+   bytes 0-3 -> float32 pressao (mmHg)
+   bytes 4-7 -> float32 vazao   (L/min)              */
+
+/* ============ CONFIG DOS GAUGES ============ */
+const GAUGE_CONFIGS = {
+  pressao: {
+    min:0, max:100, majorStep:10, minorStep:0.5, unit:'mmHg', label:'PRESSÃO',
+    zones:[[0,30,'var(--green)'],[30,60,'var(--yellow)'],[60,100,'var(--red)']]
+  },
+  vazao: {
+    min:0, max:50, majorStep:5, minorStep:1, unit:'L/min', label:'VAZÃO',
+    zones:[[0,40,'var(--green)'],[40,45,'var(--yellow)'],[45,50,'var(--red)']]
+  }
+};
+
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name.replace('var(','').replace(')','')).trim();
+function resolveColor(c){ return c.startsWith('var(') ? cssVar(c) : c; }
+
+const START_DEG = 135, SWEEP_DEG = 270;
+function valueToAngleRad(v, cfg){
+  const frac = Math.max(0, Math.min(1, (v - cfg.min) / (cfg.max - cfg.min)));
+  return (START_DEG + frac * SWEEP_DEG) * Math.PI/180;
+}
+
+class Gauge{
+  constructor(canvas, cfg){
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.cfg = cfg;
+    this.size = canvas.width;
+    this.display = cfg.min;   // valor mostrado (suavizado)
+    this.target  = cfg.min;   // valor alvo (vindo do BLE)
+    this.mode = 'startup';    // 'startup' | 'idle' | 'live'
+    this.startTime = null;
+  }
+
+  draw(value, statusLabel){
+    const ctx = this.ctx, S = this.size, cx = S/2, cy = S/2, cfg = this.cfg;
+    ctx.clearRect(0,0,S,S);
+
+    // bezel duplo (aro externo + anel fino, como na referência) + face
+    ctx.beginPath(); ctx.arc(cx,cy,S*0.485,0,7); ctx.fillStyle = cssVar('--panel'); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx,cy,S*0.465,0,7); ctx.fillStyle = cssVar('--face'); ctx.fill();
+    ctx.lineWidth = S*0.004; ctx.strokeStyle = cssVar('--tick');
+    ctx.beginPath(); ctx.arc(cx,cy,S*0.465,0,7); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx,cy,S*0.44,0,7); ctx.stroke();
+
+    // zonas coloridas
+    const rOuter = S*0.43, rInner = S*0.38;
+    cfg.zones.forEach(([a,b,color])=>{
+      const a0 = valueToAngleRad(a,cfg), a1 = valueToAngleRad(b,cfg);
+      ctx.beginPath();
+      ctx.arc(cx,cy,rOuter,a0,a1,false);
+      ctx.arc(cx,cy,rInner,a1,a0,true);
+      ctx.closePath();
+      ctx.fillStyle = resolveColor(color);
+      ctx.fill();
+    });
+
+    // ticks
+    const tickColor = cssVar('--tick');
+    const nMinor = Math.round((cfg.max-cfg.min)/cfg.minorStep);
+    for(let i=0;i<=nMinor;i++){
+      const vv = cfg.min + i*cfg.minorStep;
+      const ang = valueToAngleRad(vv,cfg);
+      const isMajor = Math.abs(vv/cfg.majorStep - Math.round(vv/cfg.majorStep)) < 1e-6;
+      const r1 = S*0.38, r0 = isMajor ? S*0.335 : S*0.36;
+      const lw = isMajor ? S*0.006 : S*0.0022;
+      ctx.beginPath();
+      ctx.moveTo(cx + r0*Math.cos(ang), cy + r0*Math.sin(ang));
+      ctx.lineTo(cx + r1*Math.cos(ang), cy + r1*Math.sin(ang));
+      ctx.strokeStyle = tickColor; ctx.lineWidth = lw; ctx.stroke();
+    }
+
+    // labels maiores
+    ctx.fillStyle = tickColor;
+    ctx.font = `bold ${Math.round(S*0.042)}px monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    const nMajor = Math.round((cfg.max-cfg.min)/cfg.majorStep);
+    for(let i=0;i<=nMajor;i++){
+      const vv = cfg.min + i*cfg.majorStep;
+      const ang = valueToAngleRad(vv,cfg);
+      const r = S*0.275;
+      ctx.fillText(String(vv), cx + r*Math.cos(ang), cy + r*Math.sin(ang));
+    }
+
+    // titulo + unidade
+    ctx.font = `600 ${Math.round(S*0.032)}px monospace`;
+    ctx.fillStyle = tickColor; ctx.globalAlpha=0.75;
+    ctx.fillText(cfg.unit, cx, cy - S*0.14);
+    ctx.globalAlpha=1;
+    ctx.font = `800 ${Math.round(S*0.05)}px sans-serif`;
+    ctx.fillText(cfg.label, cx, cy + S*0.365);
+
+    // status label (aguardando / ao vivo)
+    ctx.font = `600 ${Math.round(S*0.024)}px monospace`;
+    ctx.fillStyle = cssVar('--text-dim');
+    ctx.fillText(statusLabel, cx, cy - S*0.20);
+
+    // ponteiro (cauda curta, para nunca alcançar o display digital abaixo do centro)
+    const ang = valueToAngleRad(value,cfg);
+    const tipR = S*0.41, tailR = S*0.06, halfW = S*0.022;
+    const perp = ang + Math.PI/2;
+    const tipX = cx + tipR*Math.cos(ang), tipY = cy + tipR*Math.sin(ang);
+    const tailX = cx - tailR*Math.cos(ang), tailY = cy - tailR*Math.sin(ang);
+    const lx = tailX + halfW*Math.cos(perp), ly = tailY + halfW*Math.sin(perp);
+    const rx = tailX - halfW*Math.cos(perp), ry = tailY - halfW*Math.sin(perp);
+    ctx.beginPath();
+    ctx.moveTo(tipX,tipY); ctx.lineTo(lx,ly); ctx.lineTo(rx,ry); ctx.closePath();
+    ctx.fillStyle = cssVar('--needle'); ctx.fill();
+    ctx.lineWidth = S*0.0045; ctx.strokeStyle = cssVar('--needle-edge'); ctx.stroke();
+
+    // hub
+    ctx.beginPath(); ctx.arc(cx,cy,S*0.028,0,7); ctx.fillStyle = cssVar('--hub-ring'); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx,cy,S*0.018,0,7); ctx.fillStyle = cssVar('--hub'); ctx.fill();
+
+    // chip digital (desenhado por cima do ponteiro de propósito — nunca fica "colado")
+    const chipW = S*0.34, chipH=S*0.10;
+    const chipY = cy + S*0.17;
+    ctx.fillStyle = tickColor;
+    roundRect(ctx, cx-chipW/2, chipY, chipW, chipH, S*0.015);
+    ctx.fill();
+    // "fantasma" dos segmentos apagados (efeito visor LCD real)
+    ctx.font = `bold ${Math.round(S*0.08)}px DSEG7, monospace`;
+    ctx.fillStyle = 'rgba(245,245,240,0.12)';
+    ctx.fillText('88.8', cx, chipY + chipH/2 + S*0.002);
+    // valor real
+    ctx.fillStyle = '#F5F5F0';
+    ctx.fillText(value.toFixed(1), cx, chipY + chipH/2 + S*0.002);
+  }
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function easeInOutQuad(t){ return t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
+
+/* ============ instâncias ============ */
+const gaugePressao = new Gauge(document.getElementById('gaugePressao'), GAUGE_CONFIGS.pressao);
+const gaugeVazao    = new Gauge(document.getElementById('gaugeVazao'),   GAUGE_CONFIGS.vazao);
+const gauges = [gaugePressao, gaugeVazao];
+
+const STARTUP_TOTAL_MS = 3000; // 0 -> fundo de escala -> 0 em 3s no total
+let liveConnected = false;
+let anyDataReceived = false;
+
+function setStatus(mode){
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  dot.className = 'dot ' + (mode==='live' ? 'live' : mode==='off' ? 'off' : 'wait');
+  txt.textContent = mode==='live' ? 'Ao vivo' : mode==='off' ? 'Desconectado' : mode==='startup' ? 'Iniciando' : 'Aguardando dados';
+}
+
+function frame(ts){
+  gauges.forEach(g=>{
+    if(g.mode === 'startup'){
+      if(g.startTime === null) g.startTime = ts;
+      const elapsed = ts - g.startTime;
+      const half = STARTUP_TOTAL_MS/2;
+      let raw;
+      if(elapsed <= half){
+        raw = easeInOutQuad(elapsed/half);                 // 0 -> 1 (sobe ate fundo de escala)
+      } else if (elapsed <= STARTUP_TOTAL_MS){
+        raw = 1 - easeInOutQuad((elapsed-half)/half);       // 1 -> 0 (desce ate zero)
+      } else {
+        raw = 0;
+        g.mode = 'idle';
+      }
+      g.display = g.cfg.min + raw * (g.cfg.max - g.cfg.min);
+      g.draw(g.display, 'AUTOTESTE');
+    } else if (g.mode === 'idle'){
+      g.display += (g.cfg.min - g.display) * 0.15;
+      g.draw(g.display, anyDataReceived ? 'DESCONECTADO' : 'AGUARDANDO DADOS');
+    } else { // live
+      g.display += (g.target - g.display) * 0.25; // suavização — mantém fluidez mesmo com pacotes BLE espaçados
+      g.draw(g.display, 'AO VIVO');
+    }
+  });
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+setStatus('startup');
+setTimeout(()=>{ if(!liveConnected) setStatus('idle'); }, STARTUP_TOTAL_MS+50);
+
+/* ============ Web Bluetooth ============ */
+const connectBtn = document.getElementById('connectBtn');
+let bleDevice = null;
+
+async function connectBLE(){
+  if(!navigator.bluetooth){
+    alert('Web Bluetooth não disponível. Use Chrome no Android, via HTTPS.');
+    return;
+  }
+  try{
+    bleDevice = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: [SERVICE_UUID]
+    });
+    bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+    const server = await bleDevice.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+    const characteristic = await service.getCharacteristic(CHAR_UUID);
+    await characteristic.startNotifications();
+    characteristic.addEventListener('characteristicvaluechanged', onData);
+
+    liveConnected = true;
+    gauges.forEach(g=> g.mode = 'live');
+    setStatus('live');
+    connectBtn.textContent = 'Desconectar';
+    connectBtn.classList.add('disconnect');
+    connectBtn.onclick = disconnectBLE;
+  }catch(err){
+    console.error(err);
+    if(err.name !== 'NotFoundError'){ alert('Falha ao conectar: ' + err.message); }
+  }
+}
+
+function disconnectBLE(){
+  if(bleDevice && bleDevice.gatt.connected){ bleDevice.gatt.disconnect(); }
+}
+
+function onDisconnected(){
+  liveConnected = false;
+  gauges.forEach(g=> g.mode = 'idle');
+  setStatus('off');
+  connectBtn.textContent = 'Conectar';
+  connectBtn.classList.remove('disconnect');
+  connectBtn.onclick = connectBLE;
+}
+
+function onData(event){
+  anyDataReceived = true;
+  const dv = event.target.value; // DataView
+  const pressao = dv.getFloat32(0, true); // little-endian
+  const vazao   = dv.getFloat32(4, true);
+  gaugePressao.target = Math.max(gaugePressao.cfg.min, Math.min(gaugePressao.cfg.max, pressao));
+  gaugeVazao.target    = Math.max(gaugeVazao.cfg.min,    Math.min(gaugeVazao.cfg.max, vazao));
+}
+
+connectBtn.onclick = connectBLE;
+
+/* registra service worker (necessário para instalação como PWA) */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
