@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Painel BLE — Pressão / Vazão</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1A1D21">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+  :root{
+    --bg:            #101215;
+    --panel:         #1A1D21;
+    --face:          #EDE8DE;
+    --tick:          #2B2E33;
+    --green:         #3C8A46;
+    --yellow:        #E7B93C;
+    --red:           #C23B22;
+    --needle:        #F5F5F0;
+    --needle-edge:   #14161A;
+    --hub:           #2B2E33;
+    --hub-ring:      #9A9C9F;
+    --accent:        #3FA7A0;
+    --text-dim:      #8A8F98;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    overflow-x:hidden;
+    overscroll-behavior:none;
+  }
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 18px calc(10px + env(safe-area-inset-top)) 18px;
+    padding-top: max(14px, env(safe-area-inset-top));
+    background:var(--panel);
+    border-bottom:1px solid rgba(255,255,255,0.06);
+  }
+  .brand{ color:#EDE8DE; font-weight:700; font-size:15px; letter-spacing:0.5px; }
+  .brand small{ display:block; font-weight:400; color:var(--text-dim); font-size:11px; margin-top:2px; }
+  .status-pill{
+    display:flex; align-items:center; gap:6px;
+    font-size:12px; font-weight:600; color:var(--text-dim);
+    padding:6px 12px; border-radius:20px; background:rgba(255,255,255,0.05);
+  }
+  .dot{ width:8px; height:8px; border-radius:50%; background:var(--text-dim); transition:background .3s; }
+  .dot.live{ background:var(--green); box-shadow:0 0 6px var(--green); }
+  .dot.wait{ background:var(--yellow); animation:pulse 1.2s infinite; }
+  .dot.off{ background:var(--red); }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+
+  .connect-btn{
+    background:var(--accent); color:#0d1210; border:none;
+    font-weight:700; font-size:13px; padding:9px 16px; border-radius:10px;
+    cursor:pointer;
+  }
+  .connect-btn.disconnect{ background:transparent; color:var(--red); border:1px solid var(--red); }
+  .connect-btn:active{ transform:scale(0.97); }
+
+  .gauges{
+    display:flex; flex-wrap:wrap; justify-content:center; gap:18px;
+    padding:22px 14px calc(30px + env(safe-area-inset-bottom)) 14px;
+  }
+  .gauge-card{
+    width:min(92vw, 380px);
+  }
+  canvas{ width:100%; height:auto; display:block; }
+
+  .footer-note{
+    text-align:center; color:var(--text-dim); font
