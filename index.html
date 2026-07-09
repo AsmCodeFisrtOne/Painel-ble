@@ -1,8 +1,12 @@
 <!DOCTYPE html>
 <!--
   Painel BLE - Pressão S1/S2 & Vazão
-  Rev: r13
+  Rev: r14
   Changelog:
+    r14 - Monitor de Respiração do Paciente movido pra logo abaixo dos
+          manômetros (antes ficava lá embaixo, depois dos simuladores) —
+          agora dá pra ver a vazão e a respiração ao mesmo tempo, sem
+          rolar a página, facilitando notar a correlação entre os dois.
     r13 - Adicionado Monitor de Respiração do Paciente: gráfico de onda ao
           vivo mostrando S2 (cavidade) oscilando com a respiração (dados
           vindos do firmware r16+, que simula variabilidade respiratória
@@ -256,6 +260,17 @@
     </div>
   </div>
 
+  <div class="simulator-card" style="max-width:1400px; margin:0 auto 24px;">
+    <div class="simulator-title">Monitor de Respiração do Paciente</div>
+    <canvas id="chartRespiracao" width="1200" height="260"></canvas>
+    <div class="chart-caption">
+      <strong>O que esse gráfico mostra:</strong> a pressão em S2 (cavidade do paciente) oscilando
+      com a respiração — o diafragma comprime e relaxa a cavidade a cada ciclo, criando essa onda.
+      Repare que o ritmo <em>não é perfeitamente regular</em>: cada respiração tem um período e uma
+      profundidade levemente diferentes da anterior, como numa pessoa de verdade.
+    </div>
+  </div>
+
   <div class="lower-section">
   <div class="lower-left">
   <div class="infobar">
@@ -415,17 +430,6 @@
     </div>
   </div>
 
-  </div>
-
-  <div class="simulator-card" style="max-width:1400px;">
-    <div class="simulator-title">Monitor de Respiração do Paciente</div>
-    <canvas id="chartRespiracao" width="1200" height="260"></canvas>
-    <div class="chart-caption">
-      <strong>O que esse gráfico mostra:</strong> a pressão em S2 (cavidade do paciente) oscilando
-      com a respiração — o diafragma comprime e relaxa a cavidade a cada ciclo, criando essa onda.
-      Repare que o ritmo <em>não é perfeitamente regular</em>: cada respiração tem um período e uma
-      profundidade levemente diferentes da anterior, como numa pessoa de verdade.
-    </div>
   </div>
 
   <div class="footer-note">
