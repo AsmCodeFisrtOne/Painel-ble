@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 <!--
   Painel BLE - Pressão S1/S2 & Vazão
-  Rev: r10
+  Rev: r11
   Changelog:
+    r11 - Animação de partículas de fluxo no diagrama do Venturi: velocidade
+          proporcional à vazão real (ao vivo), com aceleração visual na
+          garganta do tubo (efeito real de Venturi — equação da continuidade).
     r10 - Nível do cilindro (LEDs) agora reinicia cheio (100%) a cada nova
           conexão BLE, e fica em branco (--%, nenhum LED aceso) enquanto
           desconectado — antes ficava com o último valor calculado mesmo
@@ -175,6 +178,7 @@
     border:1px solid rgba(255,255,255,0.12); border-radius:12px;
   }
   .venturi-svg{ width:100%; height:auto; display:block; margin:10px 0; }
+  .fluxo-particula{ filter:drop-shadow(0 0 2px rgba(14,106,138,0.6)); }
   .simulator-title{
     color:#F5F5F0; font-weight:700; font-size:14px; margin-bottom:14px;
   }
@@ -353,6 +357,15 @@
       <line x1="40" y1="160" x2="440" y2="160" stroke="#8A8F98" stroke-width="1.5" stroke-dasharray="6,5"/>
       <polygon points="440,160 425,152 425,168" fill="#8A8F98"/>
       <text x="230" y="145" text-anchor="middle" font-size="13" fill="#8A8F98" font-family="monospace">fluxo</text>
+
+      <!-- partículas de fluxo animadas (velocidade = vazão real, via JS) -->
+      <g id="fluxoParticulas">
+        <circle class="fluxo-particula" cx="60"  cy="160" r="4.5" fill="#0E6A8A"/>
+        <circle class="fluxo-particula" cx="140" cy="160" r="4.5" fill="#0E6A8A"/>
+        <circle class="fluxo-particula" cx="220" cy="160" r="4.5" fill="#0E6A8A"/>
+        <circle class="fluxo-particula" cx="300" cy="160" r="4.5" fill="#0E6A8A"/>
+        <circle class="fluxo-particula" cx="380" cy="160" r="4.5" fill="#0E6A8A"/>
+      </g>
 
       <!-- tap S1 (entrada, D1) -->
       <line x1="95" y1="90" x2="95" y2="45" stroke="#1A1A1C" stroke-width="2.5"/>
@@ -923,6 +936,44 @@ function atualizarNivelCilindro(){
 }
 setInterval(atualizarNivelCilindro, 1000);
 atualizarNivelCilindro();
+
+/* ============ Animação das partículas de fluxo no diagrama do Venturi ============
+   Velocidade base proporcional à vazão real (gaugeVazao.display). Além disso,
+   as partículas aceleram visualmente ao passar pela garganta do tubo (x entre
+   160 e 320 no SVG) — o mesmo efeito físico real do Venturi: a velocidade
+   aumenta onde a área da seção transversal diminui (equação da continuidade). */
+const fluxoParticulasEls = document.querySelectorAll('.fluxo-particula');
+const FLUXO_X_MIN = 40, FLUXO_X_MAX = 440;
+const GARGANTA_X_MIN = 160, GARGANTA_X_MAX = 320, GARGANTA_PICO_X = 240;
+
+function multiplicadorLocal(x){
+  // 1.0 fora da região de estrangulamento, sobe até ~2.8x perto da garganta (x=240)
+  if (x < GARGANTA_X_MIN || x > GARGANTA_X_MAX) return 1.0;
+  const dist = Math.abs(x - GARGANTA_PICO_X);
+  const meiaFaixa = (GARGANTA_X_MAX - GARGANTA_X_MIN) / 2;
+  const frac = 1 - (dist / meiaFaixa);           // 0 nas bordas, 1 no centro
+  return 1.0 + frac * 1.8;
+}
+
+let fluxoUltimoTs = null;
+function animarFluxo(ts){
+  if (fluxoUltimoTs === null) fluxoUltimoTs = ts;
+  const dtSeg = (ts - fluxoUltimoTs) / 1000;
+  fluxoUltimoTs = ts;
+
+  const vazao = gaugeVazao.display;                     // 0-50 L/min
+  const velBasePxSeg = 18 + vazao * 4.2;                 // parado (quase) a 0, ~228px/s a 50L/min
+
+  fluxoParticulasEls.forEach(el => {
+    let x = parseFloat(el.getAttribute('cx'));
+    x += velBasePxSeg * multiplicadorLocal(x) * dtSeg;
+    if (x > FLUXO_X_MAX) x = FLUXO_X_MIN;                 // volta pro início (loop)
+    el.setAttribute('cx', x.toFixed(1));
+  });
+
+  requestAnimationFrame(animarFluxo);
+}
+requestAnimationFrame(animarFluxo);
 
 connectBtn.onclick = connectBLE;
 
