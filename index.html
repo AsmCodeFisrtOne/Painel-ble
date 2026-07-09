@@ -1,8 +1,14 @@
 <!DOCTYPE html>
 <!--
   Painel BLE - Pressão S1/S2 & Vazão
-  Rev: r11
+  Rev: r12
   Changelog:
+    r12 - Corrigidos 2 bugs nas partículas de fluxo do diagrama do Venturi:
+          (1) agora ficam invisíveis quando desconectado (antes continuavam
+          visíveis, só bem lentas); (2) o passo de tempo da animação é
+          limitado a 0.1s, evitando que a aba em segundo plano por um tempo
+          cause um salto enorme que empilhava todas as partículas num único
+          ponto ao voltar o foco.
     r11 - Animação de partículas de fluxo no diagrama do Venturi: velocidade
           proporcional à vazão real (ao vivo), com aceleração visual na
           garganta do tubo (efeito real de Venturi — equação da continuidade).
@@ -359,7 +365,7 @@
       <text x="230" y="145" text-anchor="middle" font-size="13" fill="#8A8F98" font-family="monospace">fluxo</text>
 
       <!-- partículas de fluxo animadas (velocidade = vazão real, via JS) -->
-      <g id="fluxoParticulas">
+      <g id="fluxoParticulas" style="opacity:0; transition:opacity .4s;">
         <circle class="fluxo-particula" cx="60"  cy="160" r="4.5" fill="#0E6A8A"/>
         <circle class="fluxo-particula" cx="140" cy="160" r="4.5" fill="#0E6A8A"/>
         <circle class="fluxo-particula" cx="220" cy="160" r="4.5" fill="#0E6A8A"/>
@@ -672,6 +678,7 @@ async function connectBLE(){
     // reinicia o nível do cilindro cheio a cada nova conexão
     gasConsumidoKg = 0;
     atualizarNivelCilindro();
+    reiniciarParticulasFluxo();
   }catch(err){
     console.error(err);
     if(err.name !== 'NotFoundError'){ alert('Falha ao conectar: ' + err.message); }
@@ -943,8 +950,11 @@ atualizarNivelCilindro();
    160 e 320 no SVG) — o mesmo efeito físico real do Venturi: a velocidade
    aumenta onde a área da seção transversal diminui (equação da continuidade). */
 const fluxoParticulasEls = document.querySelectorAll('.fluxo-particula');
+const fluxoGrupoEl = document.getElementById('fluxoParticulas');
 const FLUXO_X_MIN = 40, FLUXO_X_MAX = 440;
+const FLUXO_X_INICIAIS = [60, 140, 220, 300, 380];   // posições de reinício (espaçadas)
 const GARGANTA_X_MIN = 160, GARGANTA_X_MAX = 320, GARGANTA_PICO_X = 240;
+const FLUXO_DT_MAX_SEG = 0.1;   // limita o passo de tempo (evita saltos após aba em 2º plano)
 
 function multiplicadorLocal(x){
   // 1.0 fora da região de estrangulamento, sobe até ~2.8x perto da garganta (x=240)
@@ -955,21 +965,30 @@ function multiplicadorLocal(x){
   return 1.0 + frac * 1.8;
 }
 
+function reiniciarParticulasFluxo(){
+  fluxoParticulasEls.forEach((el, i) => el.setAttribute('cx', FLUXO_X_INICIAIS[i]));
+}
+
 let fluxoUltimoTs = null;
 function animarFluxo(ts){
   if (fluxoUltimoTs === null) fluxoUltimoTs = ts;
-  const dtSeg = (ts - fluxoUltimoTs) / 1000;
+  let dtSeg = (ts - fluxoUltimoTs) / 1000;
+  dtSeg = Math.min(dtSeg, FLUXO_DT_MAX_SEG);   // nunca deixa o passo disparar (aba em 2º plano etc.)
   fluxoUltimoTs = ts;
 
-  const vazao = gaugeVazao.display;                     // 0-50 L/min
-  const velBasePxSeg = 18 + vazao * 4.2;                 // parado (quase) a 0, ~228px/s a 50L/min
+  fluxoGrupoEl.style.opacity = liveConnected ? '1' : '0';
 
-  fluxoParticulasEls.forEach(el => {
-    let x = parseFloat(el.getAttribute('cx'));
-    x += velBasePxSeg * multiplicadorLocal(x) * dtSeg;
-    if (x > FLUXO_X_MAX) x = FLUXO_X_MIN;                 // volta pro início (loop)
-    el.setAttribute('cx', x.toFixed(1));
-  });
+  if (liveConnected) {
+    const vazao = gaugeVazao.display;                     // 0-50 L/min
+    const velBasePxSeg = 18 + vazao * 4.2;                 // parado (quase) a 0, ~228px/s a 50L/min
+
+    fluxoParticulasEls.forEach(el => {
+      let x = parseFloat(el.getAttribute('cx'));
+      x += velBasePxSeg * multiplicadorLocal(x) * dtSeg;
+      if (x > FLUXO_X_MAX) x = FLUXO_X_MIN;                 // volta pro início (loop)
+      el.setAttribute('cx', x.toFixed(1));
+    });
+  }
 
   requestAnimationFrame(animarFluxo);
 }
