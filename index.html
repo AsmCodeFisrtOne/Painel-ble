@@ -1,8 +1,12 @@
 <!DOCTYPE html>
 <!--
   Painel BLE - Pressão S1/S2 & Vazão
-  Rev: r9
+  Rev: r10
   Changelog:
+    r10 - Nível do cilindro (LEDs) agora reinicia cheio (100%) a cada nova
+          conexão BLE, e fica em branco (--%, nenhum LED aceso) enquanto
+          desconectado — antes ficava com o último valor calculado mesmo
+          sem dado real.
     r9 - Layout reorganizado em 2 colunas abaixo dos manômetros: barra de
          status + simuladores à esquerda, diagrama esquemático do tubo de
          Venturi (com S1/S2 e diâmetros D1/D2) à direita. Adicionada
@@ -651,6 +655,10 @@ async function connectBLE(){
     connectBtn.textContent = 'Desconectar';
     connectBtn.classList.add('disconnect');
     connectBtn.onclick = disconnectBLE;
+
+    // reinicia o nível do cilindro cheio a cada nova conexão
+    gasConsumidoKg = 0;
+    atualizarNivelCilindro();
   }catch(err){
     console.error(err);
     if(err.name !== 'NotFoundError'){ alert('Falha ao conectar: ' + err.message); }
@@ -668,6 +676,12 @@ function onDisconnected(){
   connectBtn.textContent = 'Conectar';
   connectBtn.classList.remove('disconnect');
   connectBtn.onclick = connectBLE;
+
+  // apaga o indicador de nível ao desconectar (sem dado real, não mostra nada)
+  ledVerdeEl.classList.remove('lit');
+  ledAmareloEl.classList.remove('lit');
+  ledVermelhoEl.classList.remove('lit');
+  nivelPercentEl.textContent = '--%';
 }
 
 function onData(event){
@@ -886,6 +900,13 @@ const ledVerdeEl      = document.getElementById('ledVerde');
 const nivelPercentEl  = document.getElementById('nivelPercentual');
 
 function atualizarNivelCilindro(){
+  if(!liveConnected){
+    ledVerdeEl.classList.remove('lit');
+    ledAmareloEl.classList.remove('lit');
+    ledVermelhoEl.classList.remove('lit');
+    nivelPercentEl.textContent = '--%';
+    return;
+  }
   const vazaoLmin    = gaugeVazao.display;                 // vazão real instantânea (L/min)
   const capacidadeKg = parseFloat(simMassaEl.value);
   const litrosNesteSeg = vazaoLmin / 60;                   // L/min -> L/s (tick de 1s)
