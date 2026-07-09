@@ -1,8 +1,13 @@
 <!DOCTYPE html>
 <!--
   Painel BLE - Pressão S1/S2 & Vazão
-  Rev: r12
+  Rev: r13
   Changelog:
+    r13 - Adicionado Monitor de Respiração do Paciente: gráfico de onda ao
+          vivo mostrando S2 (cavidade) oscilando com a respiração (dados
+          vindos do firmware r16+, que simula variabilidade respiratória
+          real). Corrigida nota desatualizada no diagrama do Venturi
+          (D2 já aplicado, não mais "pendente").
     r12 - Corrigidos 2 bugs nas partículas de fluxo do diagrama do Venturi:
           (1) agora ficam invisíveis quando desconectado (antes continuavam
           visíveis, só bem lentas); (2) o passo de tempo da animação é
@@ -215,6 +220,10 @@
     width:100%; height:auto; display:block; margin:6px 0 10px;
     background:rgba(255,255,255,0.04); border-radius:8px;
   }
+  #chartRespiracao{
+    width:100%; height:auto; display:block; margin:10px 0;
+    background:rgba(255,255,255,0.04); border-radius:8px;
+  }
   .chart-caption{
     font-size:12px; line-height:1.6; color:var(--text-dim);
     background:rgba(255,255,255,0.04); border-radius:8px;
@@ -393,21 +402,30 @@
       <line x1="220" y1="185" x2="260" y2="185" stroke="#1A1A1C" stroke-width="1.2"/>
       <line x1="220" y1="178" x2="220" y2="192" stroke="#1A1A1C" stroke-width="1.2"/>
       <line x1="260" y1="178" x2="260" y2="192" stroke="#1A1A1C" stroke-width="1.2"/>
-      <text x="240" y="300" text-anchor="middle" font-size="15" fill="#1A1A1C" font-weight="bold" font-family="monospace">D2 = 3mm*</text>
+      <text x="240" y="300" text-anchor="middle" font-size="15" fill="#1A1A1C" font-weight="bold" font-family="monospace">D2 = 3mm</text>
 
       <!-- rotulos entrada/saida -->
       <text x="35" y="80" font-size="12" fill="#8A8F98" font-family="monospace">entrada</text>
       <text x="400" y="80" font-size="12" fill="#8A8F98" font-family="monospace">saída</text>
     </svg>
     <div class="sim-note">
-      * D2 pendente de ajuste manual no firmware (valor mostrado é o intermediário
-      combinado, ~3mm — atualizar aqui se o valor final ficar diferente).
       S1 mede a pressão na entrada (Ø10mm); S2 mede na garganta, o ponto mais
       estreito do Venturi. A diferença entre as duas leituras (ΔP = S1−S2) é o
       que alimenta o cálculo de vazão.
     </div>
   </div>
 
+  </div>
+
+  <div class="simulator-card" style="max-width:1400px;">
+    <div class="simulator-title">Monitor de Respiração do Paciente</div>
+    <canvas id="chartRespiracao" width="1200" height="260"></canvas>
+    <div class="chart-caption">
+      <strong>O que esse gráfico mostra:</strong> a pressão em S2 (cavidade do paciente) oscilando
+      com a respiração — o diafragma comprime e relaxa a cavidade a cada ciclo, criando essa onda.
+      Repare que o ritmo <em>não é perfeitamente regular</em>: cada respiração tem um período e uma
+      profundidade levemente diferentes da anterior, como numa pessoa de verdade.
+    </div>
   </div>
 
   <div class="footer-note">
@@ -993,6 +1011,65 @@ function animarFluxo(ts){
   requestAnimationFrame(animarFluxo);
 }
 requestAnimationFrame(animarFluxo);
+
+/* ============ Monitor de respiração: onda ao vivo de P2 (cavidade) ============
+   Mostra os últimos ~16s do valor de S2 recebido via BLE — a oscilação
+   respiratória (adicionada no firmware) aparece aqui como uma onda, com
+   período e profundidade levemente variáveis entre respirações. */
+const RESP_JANELA_S = 16;
+const respHistorico = [];   // {t, valor}
+
+function registrarAmostraRespiracao(p2){
+  const agora = performance.now()/1000;
+  respHistorico.push({t: agora, v: p2});
+  const limite = agora - RESP_JANELA_S;
+  while (respHistorico.length && respHistorico[0].t < limite) respHistorico.shift();
+}
+
+function desenharMonitorRespiracao(){
+  const canvas = document.getElementById('chartRespiracao');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  const padL=50, padR=16, padT=16, padB=16;
+  const plotW = W-padL-padR, plotH = H-padT-padB;
+  const agora = performance.now()/1000;
+
+  ctx.strokeStyle='rgba(255,255,255,0.10)'; ctx.lineWidth=1;
+  ctx.font='11px monospace'; ctx.fillStyle=cssVar('--text-dim');
+  const nY=4;
+  let vMin=0, vMax=30;
+  if (respHistorico.length>1){
+    const vs = respHistorico.map(p=>p.v);
+    vMin = Math.min(...vs)-1; vMax = Math.max(...vs)+1;
+  }
+  for(let i=0;i<=nY;i++){
+    const val = vMin + (vMax-vMin)*i/nY;
+    const yy = padT + (1-(val-vMin)/(vMax-vMin))*plotH;
+    ctx.beginPath(); ctx.moveTo(padL,yy); ctx.lineTo(W-padR,yy); ctx.stroke();
+    ctx.fillText(val.toFixed(0), 6, yy+4);
+  }
+
+  if (respHistorico.length > 1){
+    ctx.beginPath();
+    ctx.strokeStyle = cssVar('--accent'); ctx.lineWidth=2.2;
+    respHistorico.forEach((p,i)=>{
+      const x = padL + (1 - (agora-p.t)/RESP_JANELA_S) * plotW;
+      const y = padT + (1-(p.v-vMin)/(vMax-vMin))*plotH;
+      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+  }
+}
+
+function loopMonitorRespiracao(){
+  if (liveConnected) registrarAmostraRespiracao(gaugeSensor2.display);
+  desenharMonitorRespiracao();
+  requestAnimationFrame(loopMonitorRespiracao);
+}
+requestAnimationFrame(loopMonitorRespiracao);
+
 
 connectBtn.onclick = connectBLE;
 
