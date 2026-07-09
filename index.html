@@ -66,26 +66,71 @@
   .connect-btn:active{ transform:scale(0.97); }
 
   .gauges{
-    display:flex; flex-wrap:wrap; justify-content:center; gap:36px;
-    padding:36px 24px 48px 24px;
-    max-width:1400px;
+    display:flex; flex-wrap:wrap; justify-content:center; gap:28px;
+    padding:36px 24px 20px 24px;
+    max-width:1600px;
     margin:0 auto;
   }
   .gauge-card{
-    width:clamp(320px, 34vw, 560px);
+    width:clamp(280px, 26vw, 440px);
   }
   canvas{ width:100%; height:auto; display:block; }
+
+  .infobar{
+    display:flex; flex-wrap:wrap; justify-content:center; gap:16px;
+    max-width:1000px; margin:0 auto; padding:4px 24px 28px;
+  }
+  .info-chip{
+    background:var(--panel); border:1px solid rgba(255,255,255,0.12);
+    border-radius:10px; padding:10px 22px; text-align:center; min-width:170px;
+  }
+  .info-label{
+    display:block; font-size:11px; font-weight:700; letter-spacing:0.5px;
+    color:var(--text-dim); margin-bottom:4px;
+  }
+  .info-value{
+    display:block; font-family:'DSEG7', monospace; font-size:20px; font-weight:bold;
+    color:#F5F5F0;
+  }
 
   .footer-note{
     text-align:center; color:var(--text-dim); font-size:13px;
     padding:0 20px 28px; line-height:1.6;
+  }
+
+  .simulator-card{
+    max-width:640px; margin:0 auto 28px; padding:18px 24px;
+    background:var(--panel); border:1px solid rgba(255,255,255,0.12);
+    border-radius:12px;
+  }
+  .simulator-title{
+    color:#F5F5F0; font-weight:700; font-size:14px; margin-bottom:14px;
+  }
+  .sim-label{
+    display:block; color:var(--text-dim); font-size:12px; margin-bottom:8px;
+  }
+  .sim-row{ display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+  .sim-row input[type="range"]{ flex:1; }
+  .sim-row input[type="number"]{
+    width:70px; padding:6px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.2);
+    background:rgba(255,255,255,0.06); color:#F5F5F0; font-family:monospace; font-size:14px;
+  }
+  .sim-results{
+    display:flex; flex-wrap:wrap; gap:12px; margin-bottom:12px;
+  }
+  .sim-result{
+    flex:1; min-width:140px; background:rgba(255,255,255,0.05); border-radius:8px;
+    padding:8px 12px; text-align:center;
+  }
+  .sim-note{
+    color:var(--text-dim); font-size:11px; line-height:1.5; opacity:0.85;
   }
 </style>
 </head>
 <body>
 
   <div class="topbar">
-    <div class="brand">Painel BLE<small>Pressão &amp; Vazão</small></div>
+    <div class="brand">Painel BLE<small>Pressão S1 · Pressão S2 · Vazão</small></div>
     <div style="display:flex; align-items:center; gap:10px;">
       <div class="status-pill"><span class="dot wait" id="statusDot"></span><span id="statusText">Iniciando</span></div>
       <button class="connect-btn" id="connectBtn">Conectar</button>
@@ -93,8 +138,59 @@
   </div>
 
   <div class="gauges">
-    <div class="gauge-card"><canvas id="gaugePressao" width="720" height="720"></canvas></div>
+    <div class="gauge-card"><canvas id="gaugeSensor1" width="720" height="720"></canvas></div>
+    <div class="gauge-card"><canvas id="gaugeSensor2" width="720" height="720"></canvas></div>
     <div class="gauge-card"><canvas id="gaugeVazao" width="720" height="720"></canvas></div>
+  </div>
+
+  <div class="infobar">
+    <div class="info-chip">
+      <span class="info-label">ALIMENTAÇÃO</span>
+      <span class="info-value" id="infoVoltage">--.-- V</span>
+    </div>
+    <div class="info-chip">
+      <span class="info-label">TAXA BLE</span>
+      <span class="info-value" id="infoBleHz">--.- Hz</span>
+    </div>
+    <div class="info-chip">
+      <span class="info-label">TAXA AMOSTRAGEM</span>
+      <span class="info-value" id="infoSensorHz">--.- Hz</span>
+    </div>
+    <div class="info-chip">
+      <span class="info-label">TEMP. VENTURI</span>
+      <span class="info-value" id="infoTempVenturi">--.- °C</span>
+    </div>
+  </div>
+
+  <div class="simulator-card">
+    <div class="simulator-title">Simulador — Estimativa de Temperatura no Venturi</div>
+    <div class="simulator-body">
+      <label class="sim-label" for="simPressaoEntrada">Pressão de entrada (cilindro, bar)</label>
+      <div class="sim-row">
+        <input type="range" id="simPressaoEntrada" min="20" max="75" step="0.5" value="60">
+        <input type="number" id="simPressaoEntradaNum" min="20" max="75" step="0.5" value="60">
+      </div>
+      <div class="sim-results">
+        <div class="sim-result">
+          <span class="info-label">TEMP. CILINDRO (calc.)</span>
+          <span class="info-value" id="simTempCilindro">--.- °C</span>
+        </div>
+        <div class="sim-result">
+          <span class="info-label">TEMP. VENTURI (estimada)</span>
+          <span class="info-value" id="simTempVenturi">--.- °C</span>
+        </div>
+        <div class="sim-result">
+          <span class="info-label">ERRO ESTIMADO</span>
+          <span class="info-value" id="simErro">± -- %</span>
+        </div>
+      </div>
+      <div class="sim-note">
+        Modelo simplificado: curva de saturação real do CO₂ + fator de recuperação
+        térmica assumido (70% ± 20 pontos percentuais) entre o cilindro e o Venturi,
+        num redutor de 1 estágio (60→2.5 bar). Não substitui um sensor de
+        temperatura real — é só uma estimativa de ordem de grandeza.
+      </div>
+    </div>
   </div>
 
   <div class="footer-note">
@@ -106,14 +202,23 @@
 /* ============ CONFIG BLE (ajustar para bater com o firmware do ESP32) ============ */
 const SERVICE_UUID = 'a55d1a00-1000-4000-8000-00805f9b34fb';
 const CHAR_UUID    = 'a55d1a01-1000-4000-8000-00805f9b34fb';
-/* payload esperado na characteristic (8 bytes, little-endian):
-   bytes 0-3 -> float32 pressao (mmHg)
-   bytes 4-7 -> float32 vazao   (L/min)              */
+/* payload esperado na characteristic (28 bytes, little-endian, 7x float32):
+   bytes  0-3  -> P1        (mmHg)
+   bytes  4-7  -> P2        (mmHg)
+   bytes  8-11 -> Vazão     (L/min, calculada)
+   bytes 12-15 -> Tensão    (V)
+   bytes 16-19 -> Taxa BLE  (Hz)
+   bytes 20-23 -> Taxa amostragem do sensor (Hz)
+   bytes 24-27 -> Temperatura Venturi (°C, simulada)                */
 
 /* ============ CONFIG DOS GAUGES ============ */
 const GAUGE_CONFIGS = {
-  pressao: {
-    min:0, max:100, majorStep:10, minorStep:0.5, unit:'mmHg', label:'PRESSÃO',
+  sensor1: {
+    min:0, max:100, majorStep:10, minorStep:0.5, unit:'mmHg', label:'PRESSÃO S1',
+    zones:[[0,30,'var(--green)'],[30,60,'var(--yellow)'],[60,100,'var(--red)']]
+  },
+  sensor2: {
+    min:0, max:100, majorStep:10, minorStep:0.5, unit:'mmHg', label:'PRESSÃO S2',
     zones:[[0,30,'var(--green)'],[30,60,'var(--yellow)'],[60,100,'var(--red)']]
   },
   vazao: {
@@ -123,6 +228,28 @@ const GAUGE_CONFIGS = {
 };
 
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name.replace('var(','').replace(')','')).trim();
+
+/* ============ MODELO: temperatura estimada no Venturi a partir da pressão de entrada ============
+   Curva de saturação real do CO2 (ajuste polinomial, P em bar -> T do cilindro em °C),
+   derivada de dados termodinâmicos reais (equação de estado do CO2).
+   Válida aproximadamente entre 20 e 75 bar. */
+const CO2_SAT_COEFFS = [8.05875389e-05, -1.89700005e-02, 2.11707239e+00, -5.41877042e+01];
+function tCilindroFromPressao(pBar){
+  const [a,b,c,d] = CO2_SAT_COEFFS;
+  return a*pBar**3 + b*pBar**2 + c*pBar + d;
+}
+
+const CO2_T_TRIPLO_C = -56.6;         // ponto triplo do CO2 (limite teórico de resfriamento adiabático)
+const FATOR_RECUPERACAO = 0.70;       // assumido: % do resfriamento teórico que é recuperado por troca térmica
+const INCERTEZA_FATOR   = 0.20;       // incerteza assumida sobre esse fator (± pontos percentuais)
+
+function estimarTemperaturaVenturi(pBar){
+  const tCilindro = tCilindroFromPressao(pBar);
+  const deltaTTeorico = tCilindro - CO2_T_TRIPLO_C;      // resfriamento adiabático máximo teórico
+  const tVenturi = tCilindro - (1 - FATOR_RECUPERACAO) * deltaTTeorico;
+  const erroPercent = (INCERTEZA_FATOR / FATOR_RECUPERACAO) * 100;
+  return { tCilindro, tVenturi, erroPercent };
+}
 function resolveColor(c){ return c.startsWith('var(') ? cssVar(c) : c; }
 
 const START_DEG = 135, SWEEP_DEG = 270;
@@ -252,9 +379,10 @@ function roundRect(ctx,x,y,w,h,r){
 function easeInOutQuad(t){ return t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
 
 /* ============ instâncias ============ */
-const gaugePressao = new Gauge(document.getElementById('gaugePressao'), GAUGE_CONFIGS.pressao);
-const gaugeVazao    = new Gauge(document.getElementById('gaugeVazao'),   GAUGE_CONFIGS.vazao);
-const gauges = [gaugePressao, gaugeVazao];
+const gaugeSensor1 = new Gauge(document.getElementById('gaugeSensor1'), GAUGE_CONFIGS.sensor1);
+const gaugeSensor2 = new Gauge(document.getElementById('gaugeSensor2'), GAUGE_CONFIGS.sensor2);
+const gaugeVazao   = new Gauge(document.getElementById('gaugeVazao'),   GAUGE_CONFIGS.vazao);
+const gauges = [gaugeSensor1, gaugeSensor2, gaugeVazao];
 
 const STARTUP_TOTAL_MS = 3000; // 0 -> fundo de escala -> 0 em 3s no total
 let liveConnected = false;
@@ -347,11 +475,48 @@ function onDisconnected(){
 function onData(event){
   anyDataReceived = true;
   const dv = event.target.value; // DataView
-  const pressao = dv.getFloat32(0, true); // little-endian
-  const vazao   = dv.getFloat32(4, true);
-  gaugePressao.target = Math.max(gaugePressao.cfg.min, Math.min(gaugePressao.cfg.max, pressao));
-  gaugeVazao.target    = Math.max(gaugeVazao.cfg.min,    Math.min(gaugeVazao.cfg.max, vazao));
+  const p1          = dv.getFloat32(0,  true); // little-endian
+  const p2          = dv.getFloat32(4,  true);
+  const vazao       = dv.getFloat32(8,  true);
+  const tensao      = dv.getFloat32(12, true);
+  const bleHz       = dv.getFloat32(16, true);
+  const sensorHz    = dv.getFloat32(20, true);
+  const tempVenturi = dv.getFloat32(24, true);
+
+  gaugeSensor1.target = Math.max(gaugeSensor1.cfg.min, Math.min(gaugeSensor1.cfg.max, p1));
+  gaugeSensor2.target = Math.max(gaugeSensor2.cfg.min, Math.min(gaugeSensor2.cfg.max, p2));
+  gaugeVazao.target   = Math.max(gaugeVazao.cfg.min,   Math.min(gaugeVazao.cfg.max, vazao));
+
+  document.getElementById('infoVoltage').textContent     = tensao.toFixed(2) + ' V';
+  document.getElementById('infoBleHz').textContent       = bleHz.toFixed(1) + ' Hz';
+  document.getElementById('infoSensorHz').textContent    = sensorHz.toFixed(1) + ' Hz';
+  document.getElementById('infoTempVenturi').textContent = tempVenturi.toFixed(1) + ' °C';
 }
+
+/* ============ Simulador de temperatura (independente do BLE, roda no navegador) ============ */
+const simSlider   = document.getElementById('simPressaoEntrada');
+const simNumber   = document.getElementById('simPressaoEntradaNum');
+const simTempCilindroEl = document.getElementById('simTempCilindro');
+const simTempVenturiEl  = document.getElementById('simTempVenturi');
+const simErroEl         = document.getElementById('simErro');
+
+function atualizarSimulador(pBar){
+  const { tCilindro, tVenturi, erroPercent } = estimarTemperaturaVenturi(pBar);
+  simTempCilindroEl.textContent = tCilindro.toFixed(1) + ' °C';
+  simTempVenturiEl.textContent  = tVenturi.toFixed(1) + ' °C';
+  simErroEl.textContent = '± ' + erroPercent.toFixed(0) + ' %';
+}
+
+simSlider.addEventListener('input', () => {
+  simNumber.value = simSlider.value;
+  atualizarSimulador(parseFloat(simSlider.value));
+});
+simNumber.addEventListener('input', () => {
+  const v = Math.max(20, Math.min(75, parseFloat(simNumber.value) || 60));
+  simSlider.value = v;
+  atualizarSimulador(v);
+});
+atualizarSimulador(parseFloat(simSlider.value));
 
 connectBtn.onclick = connectBLE;
 
