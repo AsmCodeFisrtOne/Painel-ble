@@ -125,6 +125,14 @@
   .sim-note{
     color:var(--text-dim); font-size:11px; line-height:1.5; opacity:0.85;
   }
+  .sim-note code{
+    display:block; margin:6px 0; padding:6px 10px; background:rgba(0,0,0,0.25);
+    border-radius:6px; font-size:11px; color:#D8E8EE; overflow-x:auto;
+  }
+  #chartResfriamento{
+    width:100%; height:auto; display:block; margin:6px 0 16px;
+    background:rgba(255,255,255,0.04); border-radius:8px;
+  }
 </style>
 </head>
 <body>
@@ -186,9 +194,47 @@
       </div>
       <div class="sim-note">
         Modelo simplificado: curva de saturação real do CO₂ + fator de recuperação
-        térmica assumido (70% ± 20 pontos percentuais) entre o cilindro e o Venturi,
-        num redutor de 1 estágio (60→2.5 bar). Não substitui um sensor de
-        temperatura real — é só uma estimativa de ordem de grandeza.
+        térmica <strong>recalibrado a partir de observação real</strong> (93% ± 15
+        pontos percentuais) — geada visível só no corpo do redutor, não no Venturi,
+        indicando reaquecimento significativo do gás entre os dois pontos. Não
+        substitui um sensor de temperatura real — é só uma estimativa de ordem
+        de grandeza.
+      </div>
+    </div>
+  </div>
+
+  <div class="simulator-card">
+    <div class="simulator-title">Simulador — Resfriamento Evaporativo do Cilindro em Uso</div>
+    <div class="simulator-body">
+      <label class="sim-label" for="simVazaoUso">Vazão de uso (L/min)</label>
+      <div class="sim-row">
+        <input type="range" id="simVazaoUso" min="1" max="50" step="1" value="20">
+        <input type="number" id="simVazaoUsoNum" min="1" max="50" step="1" value="20">
+      </div>
+      <label class="sim-label" for="simTempAmbiente">Temperatura ambiente (°C)</label>
+      <div class="sim-row">
+        <input type="range" id="simTempAmbiente" min="15" max="30" step="0.5" value="22">
+        <input type="number" id="simTempAmbienteNum" min="15" max="30" step="0.5" value="22">
+      </div>
+      <canvas id="chartResfriamento" width="1000" height="420"></canvas>
+      <div class="sim-results">
+        <div class="sim-result">
+          <span class="info-label">TEMP. ESTABILIZADA</span>
+          <span class="info-value" id="simTempEstavel">--.- °C</span>
+        </div>
+        <div class="sim-result">
+          <span class="info-label">TEMPO ATÉ ESTABILIZAR</span>
+          <span class="info-value" id="simTempoEstavel">-- min</span>
+        </div>
+      </div>
+      <div class="sim-note">
+        Modelo de capacitância térmica simplificado (balanço de energia no CO₂ líquido):
+        <code>m·cp·dT/dt = h·A·(T_amb−T) − ṁ·L(T)</code>, com propriedades reais do CO₂
+        (calor latente e calor específico, via equação de estado). <strong>Suposições
+        assumidas</strong>: cilindro de 5kg de CO₂ líquido, geometria ~140mm Ø × 500mm,
+        coeficiente de convecção natural h≈8 W/m²K, massa de líquido considerada
+        constante durante a simulação. Ajustar se os dados reais do seu cilindro forem
+        diferentes.
       </div>
     </div>
   </div>
@@ -240,8 +286,12 @@ function tCilindroFromPressao(pBar){
 }
 
 const CO2_T_TRIPLO_C = -56.6;         // ponto triplo do CO2 (limite teórico de resfriamento adiabático)
-const FATOR_RECUPERACAO = 0.70;       // assumido: % do resfriamento teórico que é recuperado por troca térmica
-const INCERTEZA_FATOR   = 0.20;       // incerteza assumida sobre esse fator (± pontos percentuais)
+// Fator de recuperação térmica NA POSIÇÃO DO VENTURI (não no redutor).
+// Recalibrado a partir de observação real: geada aparece só no corpo do redutor,
+// não chega no Venturi -> o gás reaquece bastante entre os dois pontos
+// (tubulação/manifold em contato com o ambiente).
+const FATOR_RECUPERACAO = 0.93;
+const INCERTEZA_FATOR   = 0.15;       // incerteza assumida (estimativa qualitativa, sem medição real)
 
 function estimarTemperaturaVenturi(pBar){
   const tCilindro = tCilindroFromPressao(pBar);
@@ -517,6 +567,145 @@ simNumber.addEventListener('input', () => {
   atualizarSimulador(v);
 });
 atualizarSimulador(parseFloat(simSlider.value));
+
+/* ============ Simulador: resfriamento evaporativo do cilindro em uso ============
+   Balanço de energia no CO2 líquido: m*cp*dT/dt = h*A*(Tamb-T) - mdot*L(T)
+   Propriedades reais do CO2 (tabela, interpolação linear), de -20°C a 25°C. */
+const CO2_PROP_TABLE = [
+  // [T_C, L_Jkg, cp_liq_JkgK]
+  [ 25, 119600, 6467],
+  [ 20, 152000, 4264],
+  [ 15, 176600, 3436],
+  [ 10, 197200, 2998],
+  [  5, 215000, 2727],
+  [  0, 230900, 2542],
+  [ -5, 245300, 2408],
+  [-10, 258600, 2307],
+  [-15, 270900, 2228],
+  [-20, 282400, 2165],
+].reverse(); // ordena de -20 a 25 para interpolação crescente
+
+function interpolarPropriedade(tC, idx){
+  if (tC <= CO2_PROP_TABLE[0][0]) return CO2_PROP_TABLE[0][idx];
+  const last = CO2_PROP_TABLE.length - 1;
+  if (tC >= CO2_PROP_TABLE[last][0]) return CO2_PROP_TABLE[last][idx];
+  for (let i=0; i<last; i++){
+    const [t0] = CO2_PROP_TABLE[i], [t1] = CO2_PROP_TABLE[i+1];
+    if (tC >= t0 && tC <= t1){
+      const frac = (tC - t0) / (t1 - t0);
+      return CO2_PROP_TABLE[i][idx] + frac * (CO2_PROP_TABLE[i+1][idx] - CO2_PROP_TABLE[i][idx]);
+    }
+  }
+  return CO2_PROP_TABLE[last][idx];
+}
+const latenteL   = (tC) => interpolarPropriedade(tC, 1);   // J/kg
+const cpLiquido  = (tC) => interpolarPropriedade(tC, 2);   // J/kg.K
+
+// ---- suposições assumidas do cilindro (documentadas na tela) ----
+const CILINDRO_MASSA_KG   = 5.0;      // CO2 líquido, cilindro pequeno
+const CILINDRO_DIAM_M     = 0.14;     // ~140mm
+const CILINDRO_ALTURA_M   = 0.50;     // ~500mm
+const CILINDRO_AREA_M2    = Math.PI*CILINDRO_DIAM_M*CILINDRO_ALTURA_M + 2*Math.PI*(CILINDRO_DIAM_M/2)**2;
+const H_CONVECCAO_WM2K    = 8.0;      // convecção natural, ar parado
+const RHO_GAS_SAIDA       = 1.799;    // kg/m3, para converter L/min -> kg/s
+
+function simularResfriamentoCilindro(vazaoLmin, tAmbC, duracaoS=3600, dtS=1){
+  const mdot = (vazaoLmin/1000/60) * RHO_GAS_SAIDA;   // kg/s
+  let T = tAmbC;                                      // começa em equilíbrio com ambiente
+  const pontos = [{t:0, T}];
+  let estabilizou = null;
+  for (let t=dtS; t<=duracaoS; t+=dtS){
+    const L  = latenteL(T);
+    const cp = cpLiquido(T);
+    const Qin  = H_CONVECCAO_WM2K * CILINDRO_AREA_M2 * (tAmbC - T);
+    const Qout = mdot * L;
+    const dT = (Qin - Qout) / (CILINDRO_MASSA_KG * cp) * dtS;
+    T += dT;
+    pontos.push({t, T});
+    if (estabilizou === null && Math.abs(dT/dtS) < 0.0005) estabilizou = t;
+  }
+  return { pontos, estabilizou };
+}
+
+function desenharGraficoResfriamento(pontos, estabilizouS){
+  const canvas = document.getElementById('chartResfriamento');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  const padL=55, padR=20, padT=20, padB=40;
+  const plotW = W-padL-padR, plotH = H-padT-padB;
+
+  const ts = pontos.map(p=>p.t/60); // minutos
+  const Ts = pontos.map(p=>p.T);
+  const tMax = ts[ts.length-1];
+  const TMin = Math.min(...Ts)-2, TMax = Math.max(...Ts)+2;
+
+  const x = (tMin_)=> padL + (tMin_/tMax)*plotW;
+  const y = (tempC)=> padT + (1-(tempC-TMin)/(TMax-TMin))*plotH;
+
+  // grid + eixos
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth=1;
+  ctx.font = '11px monospace'; ctx.fillStyle = cssVar('--text-dim');
+  const nY=5;
+  for(let i=0;i<=nY;i++){
+    const val = TMin + (TMax-TMin)*i/nY;
+    const yy = y(val);
+    ctx.beginPath(); ctx.moveTo(padL,yy); ctx.lineTo(W-padR,yy); ctx.stroke();
+    ctx.fillText(val.toFixed(0)+'°C', 6, yy+4);
+  }
+  const nX=6;
+  for(let i=0;i<=nX;i++){
+    const val = tMax*i/nX;
+    const xx = x(val);
+    ctx.fillText(val.toFixed(0)+'min', xx-14, H-padB+16);
+  }
+
+  // linha da temperatura
+  ctx.beginPath();
+  ctx.strokeStyle = cssVar('--accent'); ctx.lineWidth=2.5;
+  ts.forEach((tm,i)=>{
+    const px=x(tm), py=y(Ts[i]);
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  });
+  ctx.stroke();
+
+  // marca de estabilização
+  if (estabilizouS !== null){
+    const xx = x(estabilizouS/60);
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(xx,padT); ctx.lineTo(xx,H-padB); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+const simVazaoUsoEl     = document.getElementById('simVazaoUso');
+const simVazaoUsoNumEl  = document.getElementById('simVazaoUsoNum');
+const simTempAmbEl      = document.getElementById('simTempAmbiente');
+const simTempAmbNumEl   = document.getElementById('simTempAmbienteNum');
+const simTempEstavelEl  = document.getElementById('simTempEstavel');
+const simTempoEstavelEl = document.getElementById('simTempoEstavel');
+
+function atualizarResfriamento(){
+  const vazao = parseFloat(simVazaoUsoEl.value);
+  const tAmb  = parseFloat(simTempAmbEl.value);
+  const { pontos, estabilizou } = simularResfriamentoCilindro(vazao, tAmb);
+  desenharGraficoResfriamento(pontos, estabilizou);
+  simTempEstavelEl.textContent = pontos[pontos.length-1].T.toFixed(1) + ' °C';
+  simTempoEstavelEl.textContent = estabilizou !== null ? (estabilizou/60).toFixed(0) + ' min' : '> 60 min';
+}
+
+simVazaoUsoEl.addEventListener('input', ()=>{ simVazaoUsoNumEl.value = simVazaoUsoEl.value; atualizarResfriamento(); });
+simVazaoUsoNumEl.addEventListener('input', ()=>{
+  const v = Math.max(1, Math.min(50, parseFloat(simVazaoUsoNumEl.value) || 20));
+  simVazaoUsoEl.value = v; atualizarResfriamento();
+});
+simTempAmbEl.addEventListener('input', ()=>{ simTempAmbNumEl.value = simTempAmbEl.value; atualizarResfriamento(); });
+simTempAmbNumEl.addEventListener('input', ()=>{
+  const v = Math.max(15, Math.min(30, parseFloat(simTempAmbNumEl.value) || 22));
+  simTempAmbEl.value = v; atualizarResfriamento();
+});
+atualizarResfriamento();
 
 connectBtn.onclick = connectBLE;
 
