@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 <!--
   Painel BLE - Pressão S1/S2 & Vazão
-  Rev: r6
+  Rev: r7
   Changelog:
+    r7 - Vazão do simulador de resfriamento agora usa média móvel (em vez do
+         valor instantâneo), evitando que picos aleatórios do firmware de
+         teste (que muda a cada 0.5s) distorçam a projeção de 60 minutos.
     r6 - Vazão de uso no simulador de resfriamento passou a refletir o
          manômetro de Vazão ao vivo (BLE), em vez de slider manual.
     r5 - Chip de temperatura do Venturi + simulador de estimativa de
@@ -251,12 +254,13 @@
       <div class="sim-note">
         Modelo de capacitância térmica simplificado (balanço de energia no CO₂ líquido):
         <code>m·cp·dT/dt = h·A·(T_amb−T) − ṁ·L(T)</code>, com propriedades reais do CO₂
-        (calor latente e calor específico, via equação de estado). A área de troca
-        térmica é recalculada a partir da capacidade escolhida (proporção altura/diâmetro
-        fixa, densidade média do líquido ~800 kg/m³). <strong>Suposições assumidas</strong>:
-        coeficiente de convecção natural h≈8 W/m²K, massa de líquido considerada
-        constante durante a simulação. Ajustar se os dados reais do seu cilindro forem
-        diferentes.
+        (calor latente e calor específico, via equação de estado). A vazão usada é uma
+        <strong>média móvel</strong> do manômetro ao vivo (evita que picos aleatórios
+        instantâneos do firmware de teste distorçam a projeção de 60 minutos). A área de
+        troca térmica é recalculada a partir da capacidade escolhida (proporção
+        altura/diâmetro fixa, densidade média do líquido ~800 kg/m³).
+        <strong>Suposições assumidas</strong>: coeficiente de convecção natural
+        h≈8 W/m²K, massa de líquido considerada constante durante a simulação.
       </div>
     </div>
   </div>
@@ -717,11 +721,17 @@ const simMassaNumEl     = document.getElementById('simMassaCilindroNum');
 const simTempEstavelEl  = document.getElementById('simTempEstavel');
 const simTempoEstavelEl = document.getElementById('simTempoEstavel');
 
+// média móvel da vazão — evita que picos aleatórios instantâneos (ex: firmware
+// de teste, que sorteia valores a cada 0.5s) distorçam a projeção de 60 minutos
+let vazaoMediaMovel = 0;
+const VAZAO_SUAVIZACAO = 0.03; // quanto menor, mais lenta/estável a média
+
 function atualizarResfriamento(){
-  const vazao = gaugeVazao.display;   // vazão ao vivo (BLE) ou do autoteste/idle
+  vazaoMediaMovel += (gaugeVazao.display - vazaoMediaMovel) * VAZAO_SUAVIZACAO;
+  const vazao = vazaoMediaMovel;
   const tAmb  = parseFloat(simTempAmbEl.value);
   const massa = parseFloat(simMassaEl.value);
-  simVazaoAtualEl.textContent = vazao.toFixed(0) + ' L/min';
+  simVazaoAtualEl.textContent = vazao.toFixed(1) + ' L/min (média)';
   const { pontos, estabilizou } = simularResfriamentoCilindro(vazao, tAmb, massa);
   desenharGraficoResfriamento(pontos, estabilizou);
   simTempEstavelEl.textContent = pontos[pontos.length-1].T.toFixed(1) + ' °C';
