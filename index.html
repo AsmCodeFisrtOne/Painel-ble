@@ -3,10 +3,11 @@
   Painel BLE - Pressão S1/S2 & Vazão
   Rev: r14
   Changelog:
-    r14 - Monitor de Respiração do Paciente movido pra logo abaixo dos
-          manômetros (antes ficava lá embaixo, depois dos simuladores) —
-          agora dá pra ver a vazão e a respiração ao mesmo tempo, sem
-          rolar a página, facilitando notar a correlação entre os dois.
+    r14 - Suporte a NaN no protocolo BLE (P1/P2/Vazão), sinalizando erro real
+          de leitura de sensor (firmware r17, leitura real dos SP160, agulha
+          fica congelada e esmaecida no último valor bom, chip digital
+          mostra "--.-", status label muda pra "SEM LEITURA". Antes o app
+          não tinha nenhum tratamento pra valor inválido vindo do BLE.
     r13 - Adicionado Monitor de Respiração do Paciente: gráfico de onda ao
           vivo mostrando S2 (cavidade) oscilando com a respiração (dados
           vindos do firmware r16+, que simula variabilidade respiratória
@@ -260,17 +261,6 @@
     </div>
   </div>
 
-  <div class="simulator-card" style="max-width:1400px; margin:0 auto 24px;">
-    <div class="simulator-title">Monitor de Respiração do Paciente</div>
-    <canvas id="chartRespiracao" width="1200" height="260"></canvas>
-    <div class="chart-caption">
-      <strong>O que esse gráfico mostra:</strong> a pressão em S2 (cavidade do paciente) oscilando
-      com a respiração — o diafragma comprime e relaxa a cavidade a cada ciclo, criando essa onda.
-      Repare que o ritmo <em>não é perfeitamente regular</em>: cada respiração tem um período e uma
-      profundidade levemente diferentes da anterior, como numa pessoa de verdade.
-    </div>
-  </div>
-
   <div class="lower-section">
   <div class="lower-left">
   <div class="infobar">
@@ -432,6 +422,17 @@
 
   </div>
 
+  <div class="simulator-card" style="max-width:1400px;">
+    <div class="simulator-title">Monitor de Respiração do Paciente</div>
+    <canvas id="chartRespiracao" width="1200" height="260"></canvas>
+    <div class="chart-caption">
+      <strong>O que esse gráfico mostra:</strong> a pressão em S2 (cavidade do paciente) oscilando
+      com a respiração — o diafragma comprime e relaxa a cavidade a cada ciclo, criando essa onda.
+      Repare que o ritmo <em>não é perfeitamente regular</em>: cada respiração tem um período e uma
+      profundidade levemente diferentes da anterior, como numa pessoa de verdade.
+    </div>
+  </div>
+
   <div class="footer-note">
     Toque em <strong>Conectar</strong> para parear via Bluetooth com o dispositivo.<br>
     Requer Chrome no Android e conexão HTTPS.
@@ -511,6 +512,8 @@ class Gauge{
     this.target  = cfg.min;   // valor alvo (vindo do BLE)
     this.mode = 'startup';    // 'startup' | 'idle' | 'live'
     this.startTime = null;
+    this.semLeitura = false; // true = sensor com erro (NaN recebido) - agulha
+                              // congela no ultimo valor bom, chip mostra "--.-"
   }
 
   draw(value, statusLabel){
@@ -577,6 +580,9 @@ class Gauge{
     ctx.fillText(statusLabel, cx, cy - S*0.20);
 
     // ponteiro (cauda curta, para nunca alcançar o display digital abaixo do centro)
+    // em erro (semLeitura), a agulha fica esmaecida no ultimo valor bom - nao
+    // "mente" mostrando um numero, mas tambem nao some do painel
+    if(this.semLeitura) ctx.globalAlpha = 0.28;
     const ang = valueToAngleRad(value,cfg);
     const tipR = S*0.41, tailR = S*0.06, halfW = S*0.022;
     const perp = ang + Math.PI/2;
@@ -592,6 +598,7 @@ class Gauge{
     // hub
     ctx.beginPath(); ctx.arc(cx,cy,S*0.028,0,7); ctx.fillStyle = cssVar('--hub-ring'); ctx.fill();
     ctx.beginPath(); ctx.arc(cx,cy,S*0.018,0,7); ctx.fillStyle = cssVar('--hub'); ctx.fill();
+    ctx.globalAlpha = 1;
 
     // chip digital (desenhado por cima do ponteiro de propósito — nunca fica "colado")
     const chipW = S*0.24, chipH=S*0.075;
@@ -603,9 +610,9 @@ class Gauge{
     ctx.font = `bold ${Math.round(S*0.06)}px DSEG7, monospace`;
     ctx.fillStyle = 'rgba(245,245,240,0.12)';
     ctx.fillText('88.8', cx, chipY + chipH/2 + S*0.002);
-    // valor real
-    ctx.fillStyle = '#F5F5F0';
-    ctx.fillText(value.toFixed(1), cx, chipY + chipH/2 + S*0.002);
+    // valor real (ou "--.-" quando o sensor esta sem leitura valida)
+    ctx.fillStyle = this.semLeitura ? 'rgba(245,245,240,0.45)' : '#F5F5F0';
+    ctx.fillText(this.semLeitura ? '--.-' : value.toFixed(1), cx, chipY + chipH/2 + S*0.002);
   }
 }
 
@@ -660,7 +667,7 @@ function frame(ts){
       g.draw(g.display, anyDataReceived ? 'DESCONECTADO' : 'AGUARDANDO DADOS');
     } else { // live
       g.display += (g.target - g.display) * 0.25; // suavização — mantém fluidez mesmo com pacotes BLE espaçados
-      g.draw(g.display, 'AO VIVO');
+      g.draw(g.display, g.semLeitura ? 'SEM LEITURA' : 'AO VIVO');
     }
   });
   requestAnimationFrame(frame);
@@ -737,14 +744,39 @@ function onData(event){
   const sensorHz    = dv.getFloat32(20, true);
   const tempVenturi = dv.getFloat32(24, true);
 
-  gaugeSensor1.target = Math.max(gaugeSensor1.cfg.min, Math.min(gaugeSensor1.cfg.max, p1));
-  gaugeSensor2.target = Math.max(gaugeSensor2.cfg.min, Math.min(gaugeSensor2.cfg.max, p2));
-  gaugeVazao.target   = Math.max(gaugeVazao.cfg.min,   Math.min(gaugeVazao.cfg.max, vazao));
+  // NaN = sensor com erro nesse pacote (combinado no protocolo). Importante:
+  // NUNCA jogar NaN direto em g.target - a suavização (display += (target-display)*0.25)
+  // propagaria NaN pra sempre e a agulha nunca mais se recuperaria, mesmo
+  // depois do sensor voltar a funcionar. Por isso: em erro, so marca
+  // semLeitura e mantém o último target válido; a agulha fica congelada e
+  // esmaecida (ver Gauge.draw) até a próxima leitura boa.
+  if(Number.isNaN(p1)){
+    gaugeSensor1.semLeitura = true;
+  } else {
+    gaugeSensor1.semLeitura = false;
+    gaugeSensor1.target = Math.max(gaugeSensor1.cfg.min, Math.min(gaugeSensor1.cfg.max, p1));
+  }
+
+  if(Number.isNaN(p2)){
+    gaugeSensor2.semLeitura = true;
+  } else {
+    gaugeSensor2.semLeitura = false;
+    gaugeSensor2.target = Math.max(gaugeSensor2.cfg.min, Math.min(gaugeSensor2.cfg.max, p2));
+  }
+
+  // vazão: o firmware já propaga NaN aqui se p1 OU p2 estiverem inválidos
+  if(Number.isNaN(vazao)){
+    gaugeVazao.semLeitura = true;
+  } else {
+    gaugeVazao.semLeitura = false;
+    gaugeVazao.target = Math.max(gaugeVazao.cfg.min, Math.min(gaugeVazao.cfg.max, vazao));
+  }
 
   document.getElementById('infoVoltage').textContent     = tensao.toFixed(2) + ' V';
   document.getElementById('infoBleHz').textContent       = bleHz.toFixed(1) + ' Hz';
   document.getElementById('infoSensorHz').textContent    = sensorHz.toFixed(1) + ' Hz';
-  document.getElementById('infoTempVenturi').textContent = tempVenturi.toFixed(1) + ' °C';
+  document.getElementById('infoTempVenturi').textContent = Number.isNaN(tempVenturi)
+    ? '-- °C' : tempVenturi.toFixed(1) + ' °C';
 }
 
 /* ============ Simulador de temperatura (independente do BLE, roda no navegador) ============ */
