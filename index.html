@@ -1,21 +1,4 @@
 <!DOCTYPE html>
-<!--
-  Painel BLE - Pressão S1/S2 & Vazão
-  Rev: r6
-  Changelog:
-    r6 - Vazão de uso no simulador de resfriamento passou a refletir o
-         manômetro de Vazão ao vivo (BLE), em vez de slider manual.
-    r5 - Chip de temperatura do Venturi + simulador de estimativa de
-         temperatura (curva de saturação real do CO2, fator de recuperação
-         térmica recalibrado a 93% a partir de observação real).
-    r4 - Simulador de resfriamento evaporativo do cilindro em uso (gráfico,
-         capacidade do cilindro ajustável).
-    r3 - Paleta de cores Innova Technik aplicada ao fundo/topbar.
-    r2 - Layout de 3 manômetros (Pressão S1, Pressão S2, Vazão calculada
-         via Venturi) + barra de status (tensão, taxa BLE, taxa amostragem).
-    r1 - Versão inicial: 2 manômetros (Pressão, Vazão), autoteste de 3s,
-         Bluetooth, PWA instalável.
--->
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -223,19 +206,15 @@
   <div class="simulator-card">
     <div class="simulator-title">Simulador — Resfriamento Evaporativo do Cilindro em Uso</div>
     <div class="simulator-body">
-      <label class="sim-label">Vazão de uso — reflete o manômetro de Vazão ao vivo</label>
+      <label class="sim-label" for="simVazaoUso">Vazão de uso (L/min)</label>
       <div class="sim-row">
-        <span class="info-value" id="simVazaoAtual" style="flex:1; text-align:left;">-- L/min</span>
+        <input type="range" id="simVazaoUso" min="1" max="50" step="1" value="20">
+        <input type="number" id="simVazaoUsoNum" min="1" max="50" step="1" value="20">
       </div>
       <label class="sim-label" for="simTempAmbiente">Temperatura ambiente (°C)</label>
       <div class="sim-row">
         <input type="range" id="simTempAmbiente" min="15" max="30" step="0.5" value="22">
         <input type="number" id="simTempAmbienteNum" min="15" max="30" step="0.5" value="22">
-      </div>
-      <label class="sim-label" for="simMassaCilindro">Capacidade do cilindro (kg de CO₂ líquido)</label>
-      <div class="sim-row">
-        <input type="range" id="simMassaCilindro" min="1" max="30" step="0.5" value="5">
-        <input type="number" id="simMassaCilindroNum" min="1" max="30" step="0.5" value="5">
       </div>
       <canvas id="chartResfriamento" width="1000" height="420"></canvas>
       <div class="sim-results">
@@ -251,9 +230,8 @@
       <div class="sim-note">
         Modelo de capacitância térmica simplificado (balanço de energia no CO₂ líquido):
         <code>m·cp·dT/dt = h·A·(T_amb−T) − ṁ·L(T)</code>, com propriedades reais do CO₂
-        (calor latente e calor específico, via equação de estado). A área de troca
-        térmica é recalculada a partir da capacidade escolhida (proporção altura/diâmetro
-        fixa, densidade média do líquido ~800 kg/m³). <strong>Suposições assumidas</strong>:
+        (calor latente e calor específico, via equação de estado). <strong>Suposições
+        assumidas</strong>: cilindro de 5kg de CO₂ líquido, geometria ~140mm Ø × 500mm,
         coeficiente de convecção natural h≈8 W/m²K, massa de líquido considerada
         constante durante a simulação. Ajustar se os dados reais do seu cilindro forem
         diferentes.
@@ -623,33 +601,25 @@ function interpolarPropriedade(tC, idx){
 const latenteL   = (tC) => interpolarPropriedade(tC, 1);   // J/kg
 const cpLiquido  = (tC) => interpolarPropriedade(tC, 2);   // J/kg.K
 
-// ---- geometria do cilindro: escalada a partir da massa (kg de CO2 líquido),
-// assumindo proporção altura/diâmetro constante (~3.57, como um cilindro típico
-// 140mm Ø x 500mm) e densidade média do CO2 líquido (~800 kg/m3 perto de 20°C) ----
-const RAZAO_ALTURA_DIAMETRO = 3.57;
-const RHO_LIQ_MEDIO_KGM3    = 800;
-const H_CONVECCAO_WM2K      = 8.0;      // convecção natural, ar parado
-const RHO_GAS_SAIDA         = 1.799;    // kg/m3, para converter L/min -> kg/s
+// ---- suposições assumidas do cilindro (documentadas na tela) ----
+const CILINDRO_MASSA_KG   = 5.0;      // CO2 líquido, cilindro pequeno
+const CILINDRO_DIAM_M     = 0.14;     // ~140mm
+const CILINDRO_ALTURA_M   = 0.50;     // ~500mm
+const CILINDRO_AREA_M2    = Math.PI*CILINDRO_DIAM_M*CILINDRO_ALTURA_M + 2*Math.PI*(CILINDRO_DIAM_M/2)**2;
+const H_CONVECCAO_WM2K    = 8.0;      // convecção natural, ar parado
+const RHO_GAS_SAIDA       = 1.799;    // kg/m3, para converter L/min -> kg/s
 
-function areaCilindro(massaKg){
-  const volume = massaKg / RHO_LIQ_MEDIO_KGM3;                      // m3
-  const diametro = Math.cbrt((4*volume)/(RAZAO_ALTURA_DIAMETRO*Math.PI));
-  const altura = RAZAO_ALTURA_DIAMETRO * diametro;
-  return Math.PI*diametro*altura + 2*Math.PI*(diametro/2)**2;       // m2
-}
-
-function simularResfriamentoCilindro(vazaoLmin, tAmbC, massaKg, duracaoS=3600, dtS=1){
+function simularResfriamentoCilindro(vazaoLmin, tAmbC, duracaoS=3600, dtS=1){
   const mdot = (vazaoLmin/1000/60) * RHO_GAS_SAIDA;   // kg/s
-  const area = areaCilindro(massaKg);
   let T = tAmbC;                                      // começa em equilíbrio com ambiente
   const pontos = [{t:0, T}];
   let estabilizou = null;
   for (let t=dtS; t<=duracaoS; t+=dtS){
     const L  = latenteL(T);
     const cp = cpLiquido(T);
-    const Qin  = H_CONVECCAO_WM2K * area * (tAmbC - T);
+    const Qin  = H_CONVECCAO_WM2K * CILINDRO_AREA_M2 * (tAmbC - T);
     const Qout = mdot * L;
-    const dT = (Qin - Qout) / (massaKg * cp) * dtS;
+    const dT = (Qin - Qout) / (CILINDRO_MASSA_KG * cp) * dtS;
     T += dT;
     pontos.push({t, T});
     if (estabilizou === null && Math.abs(dT/dtS) < 0.0005) estabilizou = t;
@@ -709,38 +679,33 @@ function desenharGraficoResfriamento(pontos, estabilizouS){
   }
 }
 
-const simVazaoAtualEl   = document.getElementById('simVazaoAtual');
+const simVazaoUsoEl     = document.getElementById('simVazaoUso');
+const simVazaoUsoNumEl  = document.getElementById('simVazaoUsoNum');
 const simTempAmbEl      = document.getElementById('simTempAmbiente');
 const simTempAmbNumEl   = document.getElementById('simTempAmbienteNum');
-const simMassaEl        = document.getElementById('simMassaCilindro');
-const simMassaNumEl     = document.getElementById('simMassaCilindroNum');
 const simTempEstavelEl  = document.getElementById('simTempEstavel');
 const simTempoEstavelEl = document.getElementById('simTempoEstavel');
 
 function atualizarResfriamento(){
-  const vazao = gaugeVazao.display;   // vazão ao vivo (BLE) ou do autoteste/idle
+  const vazao = parseFloat(simVazaoUsoEl.value);
   const tAmb  = parseFloat(simTempAmbEl.value);
-  const massa = parseFloat(simMassaEl.value);
-  simVazaoAtualEl.textContent = vazao.toFixed(0) + ' L/min';
-  const { pontos, estabilizou } = simularResfriamentoCilindro(vazao, tAmb, massa);
+  const { pontos, estabilizou } = simularResfriamentoCilindro(vazao, tAmb);
   desenharGraficoResfriamento(pontos, estabilizou);
   simTempEstavelEl.textContent = pontos[pontos.length-1].T.toFixed(1) + ' °C';
   simTempoEstavelEl.textContent = estabilizou !== null ? (estabilizou/60).toFixed(0) + ' min' : '> 60 min';
 }
 
+simVazaoUsoEl.addEventListener('input', ()=>{ simVazaoUsoNumEl.value = simVazaoUsoEl.value; atualizarResfriamento(); });
+simVazaoUsoNumEl.addEventListener('input', ()=>{
+  const v = Math.max(1, Math.min(50, parseFloat(simVazaoUsoNumEl.value) || 20));
+  simVazaoUsoEl.value = v; atualizarResfriamento();
+});
 simTempAmbEl.addEventListener('input', ()=>{ simTempAmbNumEl.value = simTempAmbEl.value; atualizarResfriamento(); });
 simTempAmbNumEl.addEventListener('input', ()=>{
   const v = Math.max(15, Math.min(30, parseFloat(simTempAmbNumEl.value) || 22));
   simTempAmbEl.value = v; atualizarResfriamento();
 });
-simMassaEl.addEventListener('input', ()=>{ simMassaNumEl.value = simMassaEl.value; atualizarResfriamento(); });
-simMassaNumEl.addEventListener('input', ()=>{
-  const v = Math.max(1, Math.min(30, parseFloat(simMassaNumEl.value) || 5));
-  simMassaEl.value = v; atualizarResfriamento();
-});
 atualizarResfriamento();
-// mantém o gráfico sincronizado com o valor ao vivo do manômetro de vazão
-setInterval(atualizarResfriamento, 1000);
 
 connectBtn.onclick = connectBLE;
 
