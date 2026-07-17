@@ -1,4 +1,46 @@
 <!DOCTYPE html>
+<!--
+  Painel BLE - Pressão S1/S2 & Vazão
+  Rev: r12
+  Changelog:
+    r12 - Corrigidos 2 bugs nas partículas de fluxo do diagrama do Venturi:
+          (1) agora ficam invisíveis quando desconectado (antes continuavam
+          visíveis, só bem lentas); (2) o passo de tempo da animação é
+          limitado a 0.1s, evitando que a aba em segundo plano por um tempo
+          cause um salto enorme que empilhava todas as partículas num único
+          ponto ao voltar o foco.
+    r11 - Animação de partículas de fluxo no diagrama do Venturi: velocidade
+          proporcional à vazão real (ao vivo), com aceleração visual na
+          garganta do tubo (efeito real de Venturi — equação da continuidade).
+    r10 - Nível do cilindro (LEDs) agora reinicia cheio (100%) a cada nova
+          conexão BLE, e fica em branco (--%, nenhum LED aceso) enquanto
+          desconectado — antes ficava com o último valor calculado mesmo
+          sem dado real.
+    r9 - Layout reorganizado em 2 colunas abaixo dos manômetros: barra de
+         status + simuladores à esquerda, diagrama esquemático do tubo de
+         Venturi (com S1/S2 e diâmetros D1/D2) à direita. Adicionada
+         legenda explicativa abaixo do gráfico de resfriamento do cilindro.
+    r8 - Adicionado bargraph de 3 LEDs (vermelho/amarelo/verde) indicando
+         nível do cilindro, calculado por integração real da vazão ao
+         longo do tempo (massa consumida = ∫vazão dt, convertida via
+         densidade do gás), usando a capacidade do cilindro (kg) do
+         simulador de resfriamento como referência de escala cheia.
+    r7 - Vazão do simulador de resfriamento agora usa média móvel (em vez do
+         valor instantâneo), evitando que picos aleatórios do firmware de
+         teste (que muda a cada 0.5s) distorçam a projeção de 60 minutos.
+    r6 - Vazão de uso no simulador de resfriamento passou a refletir o
+         manômetro de Vazão ao vivo (BLE), em vez de slider manual.
+    r5 - Chip de temperatura do Venturi + simulador de estimativa de
+         temperatura (curva de saturação real do CO2, fator de recuperação
+         térmica recalibrado a 93% a partir de observação real).
+    r4 - Simulador de resfriamento evaporativo do cilindro em uso (gráfico,
+         capacidade do cilindro ajustável).
+    r3 - Paleta de cores Innova Technik aplicada ao fundo/topbar.
+    r2 - Layout de 3 manômetros (Pressão S1, Pressão S2, Vazão calculada
+         via Venturi) + barra de status (tensão, taxa BLE, taxa amostragem).
+    r1 - Versão inicial: 2 manômetros (Pressão, Vazão), autoteste de 3s,
+         Bluetooth, PWA instalável.
+-->
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -76,6 +118,30 @@
   }
   canvas{ width:100%; height:auto; display:block; }
 
+  .led-tower{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:14px; padding:18px 20px; background:var(--panel);
+    border:1px solid rgba(255,255,255,0.12); border-radius:12px;
+    align-self:center; min-width:110px;
+  }
+  .led-title{
+    font-size:11px; font-weight:700; letter-spacing:0.5px; color:var(--text-dim);
+    text-align:center; line-height:1.4;
+  }
+  .led-circle{
+    width:34px; height:34px; border-radius:50%;
+    background:rgba(255,255,255,0.08);
+    border:2px solid rgba(255,255,255,0.15);
+    transition:background .3s, box-shadow .3s, border-color .3s;
+  }
+  .led-circle[data-cor="red"].lit{    background:var(--red);    border-color:var(--red);    box-shadow:0 0 14px var(--red); }
+  .led-circle[data-cor="yellow"].lit{ background:var(--yellow); border-color:var(--yellow); box-shadow:0 0 14px var(--yellow); }
+  .led-circle[data-cor="green"].lit{  background:var(--green);  border-color:var(--green);  box-shadow:0 0 14px var(--green); }
+  .led-percent{
+    font-family:'DSEG7', monospace; font-size:16px; font-weight:bold; color:#F5F5F0;
+    margin-top:4px;
+  }
+
   .infobar{
     display:flex; flex-wrap:wrap; justify-content:center; gap:16px;
     max-width:1000px; margin:0 auto; padding:4px 24px 28px;
@@ -103,6 +169,22 @@
     background:var(--panel); border:1px solid rgba(255,255,255,0.12);
     border-radius:12px;
   }
+
+  .lower-section{
+    display:flex; flex-wrap:wrap; gap:24px; justify-content:center;
+    max-width:1400px; margin:0 auto; padding:0 24px;
+  }
+  .lower-left{ flex:1 1 500px; max-width:640px; }
+  .lower-left .simulator-card{ max-width:none; margin:0 0 20px; }
+  .lower-left .infobar{ max-width:none; margin:0 0 20px; padding:0; }
+
+  .venturi-diagram-card{
+    flex:1 1 420px; max-width:520px; align-self:flex-start;
+    padding:18px 24px 22px; background:var(--panel);
+    border:1px solid rgba(255,255,255,0.12); border-radius:12px;
+  }
+  .venturi-svg{ width:100%; height:auto; display:block; margin:10px 0; }
+  .fluxo-particula{ filter:drop-shadow(0 0 2px rgba(14,106,138,0.6)); }
   .simulator-title{
     color:#F5F5F0; font-weight:700; font-size:14px; margin-bottom:14px;
   }
@@ -130,9 +212,16 @@
     border-radius:6px; font-size:11px; color:#D8E8EE; overflow-x:auto;
   }
   #chartResfriamento{
-    width:100%; height:auto; display:block; margin:6px 0 16px;
+    width:100%; height:auto; display:block; margin:6px 0 10px;
     background:rgba(255,255,255,0.04); border-radius:8px;
   }
+  .chart-caption{
+    font-size:12px; line-height:1.6; color:var(--text-dim);
+    background:rgba(255,255,255,0.04); border-radius:8px;
+    padding:10px 14px; margin-bottom:16px;
+  }
+  .chart-caption strong{ color:#F5F5F0; }
+  .chart-caption em{ color:#DCE8EC; font-style:normal; }
 </style>
 </head>
 <body>
@@ -149,8 +238,17 @@
     <div class="gauge-card"><canvas id="gaugeSensor1" width="720" height="720"></canvas></div>
     <div class="gauge-card"><canvas id="gaugeSensor2" width="720" height="720"></canvas></div>
     <div class="gauge-card"><canvas id="gaugeVazao" width="720" height="720"></canvas></div>
+    <div class="led-tower">
+      <div class="led-title">NÍVEL<br>CILINDRO</div>
+      <div class="led-circle" id="ledVermelho" data-cor="red"></div>
+      <div class="led-circle" id="ledAmarelo" data-cor="yellow"></div>
+      <div class="led-circle" id="ledVerde" data-cor="green"></div>
+      <div class="led-percent" id="nivelPercentual">--%</div>
+    </div>
   </div>
 
+  <div class="lower-section">
+  <div class="lower-left">
   <div class="infobar">
     <div class="info-chip">
       <span class="info-label">ALIMENTAÇÃO</span>
@@ -206,17 +304,29 @@
   <div class="simulator-card">
     <div class="simulator-title">Simulador — Resfriamento Evaporativo do Cilindro em Uso</div>
     <div class="simulator-body">
-      <label class="sim-label" for="simVazaoUso">Vazão de uso (L/min)</label>
+      <label class="sim-label">Vazão de uso — reflete o manômetro de Vazão ao vivo</label>
       <div class="sim-row">
-        <input type="range" id="simVazaoUso" min="1" max="50" step="1" value="20">
-        <input type="number" id="simVazaoUsoNum" min="1" max="50" step="1" value="20">
+        <span class="info-value" id="simVazaoAtual" style="flex:1; text-align:left;">-- L/min</span>
       </div>
       <label class="sim-label" for="simTempAmbiente">Temperatura ambiente (°C)</label>
       <div class="sim-row">
         <input type="range" id="simTempAmbiente" min="15" max="30" step="0.5" value="22">
         <input type="number" id="simTempAmbienteNum" min="15" max="30" step="0.5" value="22">
       </div>
+      <label class="sim-label" for="simMassaCilindro">Capacidade do cilindro (kg de CO₂ líquido)</label>
+      <div class="sim-row">
+        <input type="range" id="simMassaCilindro" min="1" max="30" step="0.5" value="5">
+        <input type="number" id="simMassaCilindroNum" min="1" max="30" step="0.5" value="5">
+      </div>
       <canvas id="chartResfriamento" width="1000" height="420"></canvas>
+      <div class="chart-caption">
+        <strong>O que esse gráfico mostra:</strong> a temperatura do CO₂ <em>líquido</em>
+        dentro do cilindro caindo ao longo do tempo, enquanto ele é usado continuamente.
+        Ao retirar gás, o líquido que sobra evapora pra repor o vapor retirado — e evaporar
+        consome calor (calor latente), tirando essa energia do próprio líquido. Quanto
+        maior a vazão sustentada, mais rápido e mais fundo essa queda. Eixo X = minutos
+        de uso contínuo; eixo Y = temperatura do líquido (°C).
+      </div>
       <div class="sim-results">
         <div class="sim-result">
           <span class="info-label">TEMP. ESTABILIZADA</span>
@@ -230,13 +340,74 @@
       <div class="sim-note">
         Modelo de capacitância térmica simplificado (balanço de energia no CO₂ líquido):
         <code>m·cp·dT/dt = h·A·(T_amb−T) − ṁ·L(T)</code>, com propriedades reais do CO₂
-        (calor latente e calor específico, via equação de estado). <strong>Suposições
-        assumidas</strong>: cilindro de 5kg de CO₂ líquido, geometria ~140mm Ø × 500mm,
-        coeficiente de convecção natural h≈8 W/m²K, massa de líquido considerada
-        constante durante a simulação. Ajustar se os dados reais do seu cilindro forem
-        diferentes.
+        (calor latente e calor específico, via equação de estado). A vazão usada é uma
+        <strong>média móvel</strong> do manômetro ao vivo (evita que picos aleatórios
+        instantâneos do firmware de teste distorçam a projeção de 60 minutos). A área de
+        troca térmica é recalculada a partir da capacidade escolhida (proporção
+        altura/diâmetro fixa, densidade média do líquido ~800 kg/m³).
+        <strong>Suposições assumidas</strong>: coeficiente de convecção natural
+        h≈8 W/m²K, massa de líquido considerada constante durante a simulação.
       </div>
     </div>
+  </div>
+  </div>
+
+  <div class="venturi-diagram-card">
+    <div class="simulator-title">Esquema do Venturi</div>
+    <svg viewBox="0 0 480 320" class="venturi-svg" xmlns="http://www.w3.org/2000/svg">
+      <!-- corpo do tubo (contorno converge-diverge) -->
+      <path d="M 30,90  L 160,90   L 220,145  L 260,145  L 320,90   L 450,90
+               L 450,230 L 320,230 L 260,175  L 220,175  L 160,230  L 30,230 Z"
+            fill="#F7F6F2" stroke="#1A1A1C" stroke-width="3"/>
+      <!-- linha de centro / seta de fluxo -->
+      <line x1="40" y1="160" x2="440" y2="160" stroke="#8A8F98" stroke-width="1.5" stroke-dasharray="6,5"/>
+      <polygon points="440,160 425,152 425,168" fill="#8A8F98"/>
+      <text x="230" y="145" text-anchor="middle" font-size="13" fill="#8A8F98" font-family="monospace">fluxo</text>
+
+      <!-- partículas de fluxo animadas (velocidade = vazão real, via JS) -->
+      <g id="fluxoParticulas" style="opacity:0; transition:opacity .4s;">
+        <circle class="fluxo-particula" cx="60"  cy="160" r="4.5" fill="#0E6A8A"/>
+        <circle class="fluxo-particula" cx="140" cy="160" r="4.5" fill="#0E6A8A"/>
+        <circle class="fluxo-particula" cx="220" cy="160" r="4.5" fill="#0E6A8A"/>
+        <circle class="fluxo-particula" cx="300" cy="160" r="4.5" fill="#0E6A8A"/>
+        <circle class="fluxo-particula" cx="380" cy="160" r="4.5" fill="#0E6A8A"/>
+      </g>
+
+      <!-- tap S1 (entrada, D1) -->
+      <line x1="95" y1="90" x2="95" y2="45" stroke="#1A1A1C" stroke-width="2.5"/>
+      <rect x="65" y="14" width="60" height="32" rx="6" fill="#0E6A8A" stroke="#1A1A1C" stroke-width="2"/>
+      <text x="95" y="35" text-anchor="middle" font-size="15" fill="#F5F5F0" font-weight="bold" font-family="monospace">S1</text>
+
+      <!-- tap S2 (garganta, D2) -->
+      <line x1="240" y1="145" x2="240" y2="45" stroke="#1A1A1C" stroke-width="2.5"/>
+      <rect x="210" y="14" width="60" height="32" rx="6" fill="#0E6A8A" stroke="#1A1A1C" stroke-width="2"/>
+      <text x="240" y="35" text-anchor="middle" font-size="15" fill="#F5F5F0" font-weight="bold" font-family="monospace">S2</text>
+
+      <!-- cota D1 (entrada) -->
+      <line x1="30" y1="255" x2="160" y2="255" stroke="#1A1A1C" stroke-width="1.2"/>
+      <line x1="30" y1="248" x2="30" y2="262" stroke="#1A1A1C" stroke-width="1.2"/>
+      <line x1="160" y1="248" x2="160" y2="262" stroke="#1A1A1C" stroke-width="1.2"/>
+      <text x="95" y="275" text-anchor="middle" font-size="15" fill="#1A1A1C" font-weight="bold" font-family="monospace">D1 = 10mm</text>
+
+      <!-- cota D2 (garganta) -->
+      <line x1="220" y1="185" x2="260" y2="185" stroke="#1A1A1C" stroke-width="1.2"/>
+      <line x1="220" y1="178" x2="220" y2="192" stroke="#1A1A1C" stroke-width="1.2"/>
+      <line x1="260" y1="178" x2="260" y2="192" stroke="#1A1A1C" stroke-width="1.2"/>
+      <text x="240" y="300" text-anchor="middle" font-size="15" fill="#1A1A1C" font-weight="bold" font-family="monospace">D2 = 3mm*</text>
+
+      <!-- rotulos entrada/saida -->
+      <text x="35" y="80" font-size="12" fill="#8A8F98" font-family="monospace">entrada</text>
+      <text x="400" y="80" font-size="12" fill="#8A8F98" font-family="monospace">saída</text>
+    </svg>
+    <div class="sim-note">
+      * D2 pendente de ajuste manual no firmware (valor mostrado é o intermediário
+      combinado, ~3mm — atualizar aqui se o valor final ficar diferente).
+      S1 mede a pressão na entrada (Ø10mm); S2 mede na garganta, o ponto mais
+      estreito do Venturi. A diferença entre as duas leituras (ΔP = S1−S2) é o
+      que alimenta o cálculo de vazão.
+    </div>
+  </div>
+
   </div>
 
   <div class="footer-note">
@@ -503,6 +674,11 @@ async function connectBLE(){
     connectBtn.textContent = 'Desconectar';
     connectBtn.classList.add('disconnect');
     connectBtn.onclick = disconnectBLE;
+
+    // reinicia o nível do cilindro cheio a cada nova conexão
+    gasConsumidoKg = 0;
+    atualizarNivelCilindro();
+    reiniciarParticulasFluxo();
   }catch(err){
     console.error(err);
     if(err.name !== 'NotFoundError'){ alert('Falha ao conectar: ' + err.message); }
@@ -520,6 +696,12 @@ function onDisconnected(){
   connectBtn.textContent = 'Conectar';
   connectBtn.classList.remove('disconnect');
   connectBtn.onclick = connectBLE;
+
+  // apaga o indicador de nível ao desconectar (sem dado real, não mostra nada)
+  ledVerdeEl.classList.remove('lit');
+  ledAmareloEl.classList.remove('lit');
+  ledVermelhoEl.classList.remove('lit');
+  nivelPercentEl.textContent = '--%';
 }
 
 function onData(event){
@@ -601,25 +783,33 @@ function interpolarPropriedade(tC, idx){
 const latenteL   = (tC) => interpolarPropriedade(tC, 1);   // J/kg
 const cpLiquido  = (tC) => interpolarPropriedade(tC, 2);   // J/kg.K
 
-// ---- suposições assumidas do cilindro (documentadas na tela) ----
-const CILINDRO_MASSA_KG   = 5.0;      // CO2 líquido, cilindro pequeno
-const CILINDRO_DIAM_M     = 0.14;     // ~140mm
-const CILINDRO_ALTURA_M   = 0.50;     // ~500mm
-const CILINDRO_AREA_M2    = Math.PI*CILINDRO_DIAM_M*CILINDRO_ALTURA_M + 2*Math.PI*(CILINDRO_DIAM_M/2)**2;
-const H_CONVECCAO_WM2K    = 8.0;      // convecção natural, ar parado
-const RHO_GAS_SAIDA       = 1.799;    // kg/m3, para converter L/min -> kg/s
+// ---- geometria do cilindro: escalada a partir da massa (kg de CO2 líquido),
+// assumindo proporção altura/diâmetro constante (~3.57, como um cilindro típico
+// 140mm Ø x 500mm) e densidade média do CO2 líquido (~800 kg/m3 perto de 20°C) ----
+const RAZAO_ALTURA_DIAMETRO = 3.57;
+const RHO_LIQ_MEDIO_KGM3    = 800;
+const H_CONVECCAO_WM2K      = 8.0;      // convecção natural, ar parado
+const RHO_GAS_SAIDA         = 1.799;    // kg/m3, para converter L/min -> kg/s
 
-function simularResfriamentoCilindro(vazaoLmin, tAmbC, duracaoS=3600, dtS=1){
+function areaCilindro(massaKg){
+  const volume = massaKg / RHO_LIQ_MEDIO_KGM3;                      // m3
+  const diametro = Math.cbrt((4*volume)/(RAZAO_ALTURA_DIAMETRO*Math.PI));
+  const altura = RAZAO_ALTURA_DIAMETRO * diametro;
+  return Math.PI*diametro*altura + 2*Math.PI*(diametro/2)**2;       // m2
+}
+
+function simularResfriamentoCilindro(vazaoLmin, tAmbC, massaKg, duracaoS=3600, dtS=1){
   const mdot = (vazaoLmin/1000/60) * RHO_GAS_SAIDA;   // kg/s
+  const area = areaCilindro(massaKg);
   let T = tAmbC;                                      // começa em equilíbrio com ambiente
   const pontos = [{t:0, T}];
   let estabilizou = null;
   for (let t=dtS; t<=duracaoS; t+=dtS){
     const L  = latenteL(T);
     const cp = cpLiquido(T);
-    const Qin  = H_CONVECCAO_WM2K * CILINDRO_AREA_M2 * (tAmbC - T);
+    const Qin  = H_CONVECCAO_WM2K * area * (tAmbC - T);
     const Qout = mdot * L;
-    const dT = (Qin - Qout) / (CILINDRO_MASSA_KG * cp) * dtS;
+    const dT = (Qin - Qout) / (massaKg * cp) * dtS;
     T += dT;
     pontos.push({t, T});
     if (estabilizou === null && Math.abs(dT/dtS) < 0.0005) estabilizou = t;
@@ -679,33 +869,130 @@ function desenharGraficoResfriamento(pontos, estabilizouS){
   }
 }
 
-const simVazaoUsoEl     = document.getElementById('simVazaoUso');
-const simVazaoUsoNumEl  = document.getElementById('simVazaoUsoNum');
+const simVazaoAtualEl   = document.getElementById('simVazaoAtual');
 const simTempAmbEl      = document.getElementById('simTempAmbiente');
 const simTempAmbNumEl   = document.getElementById('simTempAmbienteNum');
+const simMassaEl        = document.getElementById('simMassaCilindro');
+const simMassaNumEl     = document.getElementById('simMassaCilindroNum');
 const simTempEstavelEl  = document.getElementById('simTempEstavel');
 const simTempoEstavelEl = document.getElementById('simTempoEstavel');
 
+// média móvel da vazão — evita que picos aleatórios instantâneos (ex: firmware
+// de teste, que sorteia valores a cada 0.5s) distorçam a projeção de 60 minutos
+let vazaoMediaMovel = 0;
+const VAZAO_SUAVIZACAO = 0.03; // quanto menor, mais lenta/estável a média
+
 function atualizarResfriamento(){
-  const vazao = parseFloat(simVazaoUsoEl.value);
+  vazaoMediaMovel += (gaugeVazao.display - vazaoMediaMovel) * VAZAO_SUAVIZACAO;
+  const vazao = vazaoMediaMovel;
   const tAmb  = parseFloat(simTempAmbEl.value);
-  const { pontos, estabilizou } = simularResfriamentoCilindro(vazao, tAmb);
+  const massa = parseFloat(simMassaEl.value);
+  simVazaoAtualEl.textContent = vazao.toFixed(1) + ' L/min (média)';
+  const { pontos, estabilizou } = simularResfriamentoCilindro(vazao, tAmb, massa);
   desenharGraficoResfriamento(pontos, estabilizou);
   simTempEstavelEl.textContent = pontos[pontos.length-1].T.toFixed(1) + ' °C';
   simTempoEstavelEl.textContent = estabilizou !== null ? (estabilizou/60).toFixed(0) + ' min' : '> 60 min';
 }
 
-simVazaoUsoEl.addEventListener('input', ()=>{ simVazaoUsoNumEl.value = simVazaoUsoEl.value; atualizarResfriamento(); });
-simVazaoUsoNumEl.addEventListener('input', ()=>{
-  const v = Math.max(1, Math.min(50, parseFloat(simVazaoUsoNumEl.value) || 20));
-  simVazaoUsoEl.value = v; atualizarResfriamento();
-});
 simTempAmbEl.addEventListener('input', ()=>{ simTempAmbNumEl.value = simTempAmbEl.value; atualizarResfriamento(); });
 simTempAmbNumEl.addEventListener('input', ()=>{
   const v = Math.max(15, Math.min(30, parseFloat(simTempAmbNumEl.value) || 22));
   simTempAmbEl.value = v; atualizarResfriamento();
 });
+simMassaEl.addEventListener('input', ()=>{ simMassaNumEl.value = simMassaEl.value; atualizarResfriamento(); });
+simMassaNumEl.addEventListener('input', ()=>{
+  const v = Math.max(1, Math.min(30, parseFloat(simMassaNumEl.value) || 5));
+  simMassaEl.value = v; atualizarResfriamento();
+});
 atualizarResfriamento();
+// mantém o gráfico sincronizado com o valor ao vivo do manômetro de vazão
+setInterval(atualizarResfriamento, 1000);
+
+/* ============ Nível do cilindro: integração real da vazão ao longo do tempo ============
+   Consome massa de CO2 conforme a vazão medida (não é simulado à parte — soma de verdade
+   o volume que passou pelo Venturi, convertido em massa via a densidade do gás na saída).
+   Usa a mesma capacidade do cilindro (kg) configurada no simulador de resfriamento acima
+   como referência de escala cheia. */
+let gasConsumidoKg = 0;
+const ledVermelhoEl   = document.getElementById('ledVermelho');
+const ledAmareloEl    = document.getElementById('ledAmarelo');
+const ledVerdeEl      = document.getElementById('ledVerde');
+const nivelPercentEl  = document.getElementById('nivelPercentual');
+
+function atualizarNivelCilindro(){
+  if(!liveConnected){
+    ledVerdeEl.classList.remove('lit');
+    ledAmareloEl.classList.remove('lit');
+    ledVermelhoEl.classList.remove('lit');
+    nivelPercentEl.textContent = '--%';
+    return;
+  }
+  const vazaoLmin    = gaugeVazao.display;                 // vazão real instantânea (L/min)
+  const capacidadeKg = parseFloat(simMassaEl.value);
+  const litrosNesteSeg = vazaoLmin / 60;                   // L/min -> L/s (tick de 1s)
+  const kgNesteSeg      = (litrosNesteSeg / 1000) * RHO_GAS_SAIDA;
+  gasConsumidoKg = Math.min(capacidadeKg, gasConsumidoKg + kgNesteSeg);
+
+  const restanteKg   = Math.max(0, capacidadeKg - gasConsumidoKg);
+  const percentual   = (restanteKg / capacidadeKg) * 100;
+
+  ledVerdeEl.classList.toggle('lit',    percentual > 60);
+  ledAmareloEl.classList.toggle('lit',  percentual <= 60 && percentual > 20);
+  ledVermelhoEl.classList.toggle('lit', percentual <= 20);
+  nivelPercentEl.textContent = percentual.toFixed(0) + '%';
+}
+setInterval(atualizarNivelCilindro, 1000);
+atualizarNivelCilindro();
+
+/* ============ Animação das partículas de fluxo no diagrama do Venturi ============
+   Velocidade base proporcional à vazão real (gaugeVazao.display). Além disso,
+   as partículas aceleram visualmente ao passar pela garganta do tubo (x entre
+   160 e 320 no SVG) — o mesmo efeito físico real do Venturi: a velocidade
+   aumenta onde a área da seção transversal diminui (equação da continuidade). */
+const fluxoParticulasEls = document.querySelectorAll('.fluxo-particula');
+const fluxoGrupoEl = document.getElementById('fluxoParticulas');
+const FLUXO_X_MIN = 40, FLUXO_X_MAX = 440;
+const FLUXO_X_INICIAIS = [60, 140, 220, 300, 380];   // posições de reinício (espaçadas)
+const GARGANTA_X_MIN = 160, GARGANTA_X_MAX = 320, GARGANTA_PICO_X = 240;
+const FLUXO_DT_MAX_SEG = 0.1;   // limita o passo de tempo (evita saltos após aba em 2º plano)
+
+function multiplicadorLocal(x){
+  // 1.0 fora da região de estrangulamento, sobe até ~2.8x perto da garganta (x=240)
+  if (x < GARGANTA_X_MIN || x > GARGANTA_X_MAX) return 1.0;
+  const dist = Math.abs(x - GARGANTA_PICO_X);
+  const meiaFaixa = (GARGANTA_X_MAX - GARGANTA_X_MIN) / 2;
+  const frac = 1 - (dist / meiaFaixa);           // 0 nas bordas, 1 no centro
+  return 1.0 + frac * 1.8;
+}
+
+function reiniciarParticulasFluxo(){
+  fluxoParticulasEls.forEach((el, i) => el.setAttribute('cx', FLUXO_X_INICIAIS[i]));
+}
+
+let fluxoUltimoTs = null;
+function animarFluxo(ts){
+  if (fluxoUltimoTs === null) fluxoUltimoTs = ts;
+  let dtSeg = (ts - fluxoUltimoTs) / 1000;
+  dtSeg = Math.min(dtSeg, FLUXO_DT_MAX_SEG);   // nunca deixa o passo disparar (aba em 2º plano etc.)
+  fluxoUltimoTs = ts;
+
+  fluxoGrupoEl.style.opacity = liveConnected ? '1' : '0';
+
+  if (liveConnected) {
+    const vazao = gaugeVazao.display;                     // 0-50 L/min
+    const velBasePxSeg = 18 + vazao * 4.2;                 // parado (quase) a 0, ~228px/s a 50L/min
+
+    fluxoParticulasEls.forEach(el => {
+      let x = parseFloat(el.getAttribute('cx'));
+      x += velBasePxSeg * multiplicadorLocal(x) * dtSeg;
+      if (x > FLUXO_X_MAX) x = FLUXO_X_MIN;                 // volta pro início (loop)
+      el.setAttribute('cx', x.toFixed(1));
+    });
+  }
+
+  requestAnimationFrame(animarFluxo);
+}
+requestAnimationFrame(animarFluxo);
 
 connectBtn.onclick = connectBLE;
 
