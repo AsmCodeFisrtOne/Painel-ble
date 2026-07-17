@@ -1,35 +1,8 @@
 <!DOCTYPE html>
 <!--
   Painel BLE - Pressão S1/S2 & Vazão
-  Rev: r14
+  Rev: r8
   Changelog:
-    r14 - Suporte a NaN no protocolo BLE (P1/P2/Vazão), sinalizando erro real
-          de leitura de sensor (firmware r17, leitura real dos SP160, agulha
-          fica congelada e esmaecida no último valor bom, chip digital
-          mostra "--.-", status label muda pra "SEM LEITURA". Antes o app
-          não tinha nenhum tratamento pra valor inválido vindo do BLE.
-    r13 - Adicionado Monitor de Respiração do Paciente: gráfico de onda ao
-          vivo mostrando S2 (cavidade) oscilando com a respiração (dados
-          vindos do firmware r16+, que simula variabilidade respiratória
-          real). Corrigida nota desatualizada no diagrama do Venturi
-          (D2 já aplicado, não mais "pendente").
-    r12 - Corrigidos 2 bugs nas partículas de fluxo do diagrama do Venturi:
-          (1) agora ficam invisíveis quando desconectado (antes continuavam
-          visíveis, só bem lentas); (2) o passo de tempo da animação é
-          limitado a 0.1s, evitando que a aba em segundo plano por um tempo
-          cause um salto enorme que empilhava todas as partículas num único
-          ponto ao voltar o foco.
-    r11 - Animação de partículas de fluxo no diagrama do Venturi: velocidade
-          proporcional à vazão real (ao vivo), com aceleração visual na
-          garganta do tubo (efeito real de Venturi — equação da continuidade).
-    r10 - Nível do cilindro (LEDs) agora reinicia cheio (100%) a cada nova
-          conexão BLE, e fica em branco (--%, nenhum LED aceso) enquanto
-          desconectado — antes ficava com o último valor calculado mesmo
-          sem dado real.
-    r9 - Layout reorganizado em 2 colunas abaixo dos manômetros: barra de
-         status + simuladores à esquerda, diagrama esquemático do tubo de
-         Venturi (com S1/S2 e diâmetros D1/D2) à direita. Adicionada
-         legenda explicativa abaixo do gráfico de resfriamento do cilindro.
     r8 - Adicionado bargraph de 3 LEDs (vermelho/amarelo/verde) indicando
          nível do cilindro, calculado por integração real da vazão ao
          longo do tempo (massa consumida = ∫vazão dt, convertida via
@@ -179,22 +152,6 @@
     background:var(--panel); border:1px solid rgba(255,255,255,0.12);
     border-radius:12px;
   }
-
-  .lower-section{
-    display:flex; flex-wrap:wrap; gap:24px; justify-content:center;
-    max-width:1400px; margin:0 auto; padding:0 24px;
-  }
-  .lower-left{ flex:1 1 500px; max-width:640px; }
-  .lower-left .simulator-card{ max-width:none; margin:0 0 20px; }
-  .lower-left .infobar{ max-width:none; margin:0 0 20px; padding:0; }
-
-  .venturi-diagram-card{
-    flex:1 1 420px; max-width:520px; align-self:flex-start;
-    padding:18px 24px 22px; background:var(--panel);
-    border:1px solid rgba(255,255,255,0.12); border-radius:12px;
-  }
-  .venturi-svg{ width:100%; height:auto; display:block; margin:10px 0; }
-  .fluxo-particula{ filter:drop-shadow(0 0 2px rgba(14,106,138,0.6)); }
   .simulator-title{
     color:#F5F5F0; font-weight:700; font-size:14px; margin-bottom:14px;
   }
@@ -222,20 +179,9 @@
     border-radius:6px; font-size:11px; color:#D8E8EE; overflow-x:auto;
   }
   #chartResfriamento{
-    width:100%; height:auto; display:block; margin:6px 0 10px;
+    width:100%; height:auto; display:block; margin:6px 0 16px;
     background:rgba(255,255,255,0.04); border-radius:8px;
   }
-  #chartRespiracao{
-    width:100%; height:auto; display:block; margin:10px 0;
-    background:rgba(255,255,255,0.04); border-radius:8px;
-  }
-  .chart-caption{
-    font-size:12px; line-height:1.6; color:var(--text-dim);
-    background:rgba(255,255,255,0.04); border-radius:8px;
-    padding:10px 14px; margin-bottom:16px;
-  }
-  .chart-caption strong{ color:#F5F5F0; }
-  .chart-caption em{ color:#DCE8EC; font-style:normal; }
 </style>
 </head>
 <body>
@@ -261,8 +207,6 @@
     </div>
   </div>
 
-  <div class="lower-section">
-  <div class="lower-left">
   <div class="infobar">
     <div class="info-chip">
       <span class="info-label">ALIMENTAÇÃO</span>
@@ -333,14 +277,6 @@
         <input type="number" id="simMassaCilindroNum" min="1" max="30" step="0.5" value="5">
       </div>
       <canvas id="chartResfriamento" width="1000" height="420"></canvas>
-      <div class="chart-caption">
-        <strong>O que esse gráfico mostra:</strong> a temperatura do CO₂ <em>líquido</em>
-        dentro do cilindro caindo ao longo do tempo, enquanto ele é usado continuamente.
-        Ao retirar gás, o líquido que sobra evapora pra repor o vapor retirado — e evaporar
-        consome calor (calor latente), tirando essa energia do próprio líquido. Quanto
-        maior a vazão sustentada, mais rápido e mais fundo essa queda. Eixo X = minutos
-        de uso contínuo; eixo Y = temperatura do líquido (°C).
-      </div>
       <div class="sim-results">
         <div class="sim-result">
           <span class="info-label">TEMP. ESTABILIZADA</span>
@@ -362,74 +298,6 @@
         <strong>Suposições assumidas</strong>: coeficiente de convecção natural
         h≈8 W/m²K, massa de líquido considerada constante durante a simulação.
       </div>
-    </div>
-  </div>
-  </div>
-
-  <div class="venturi-diagram-card">
-    <div class="simulator-title">Esquema do Venturi</div>
-    <svg viewBox="0 0 480 320" class="venturi-svg" xmlns="http://www.w3.org/2000/svg">
-      <!-- corpo do tubo (contorno converge-diverge) -->
-      <path d="M 30,90  L 160,90   L 220,145  L 260,145  L 320,90   L 450,90
-               L 450,230 L 320,230 L 260,175  L 220,175  L 160,230  L 30,230 Z"
-            fill="#F7F6F2" stroke="#1A1A1C" stroke-width="3"/>
-      <!-- linha de centro / seta de fluxo -->
-      <line x1="40" y1="160" x2="440" y2="160" stroke="#8A8F98" stroke-width="1.5" stroke-dasharray="6,5"/>
-      <polygon points="440,160 425,152 425,168" fill="#8A8F98"/>
-      <text x="230" y="145" text-anchor="middle" font-size="13" fill="#8A8F98" font-family="monospace">fluxo</text>
-
-      <!-- partículas de fluxo animadas (velocidade = vazão real, via JS) -->
-      <g id="fluxoParticulas" style="opacity:0; transition:opacity .4s;">
-        <circle class="fluxo-particula" cx="60"  cy="160" r="4.5" fill="#0E6A8A"/>
-        <circle class="fluxo-particula" cx="140" cy="160" r="4.5" fill="#0E6A8A"/>
-        <circle class="fluxo-particula" cx="220" cy="160" r="4.5" fill="#0E6A8A"/>
-        <circle class="fluxo-particula" cx="300" cy="160" r="4.5" fill="#0E6A8A"/>
-        <circle class="fluxo-particula" cx="380" cy="160" r="4.5" fill="#0E6A8A"/>
-      </g>
-
-      <!-- tap S1 (entrada, D1) -->
-      <line x1="95" y1="90" x2="95" y2="45" stroke="#1A1A1C" stroke-width="2.5"/>
-      <rect x="65" y="14" width="60" height="32" rx="6" fill="#0E6A8A" stroke="#1A1A1C" stroke-width="2"/>
-      <text x="95" y="35" text-anchor="middle" font-size="15" fill="#F5F5F0" font-weight="bold" font-family="monospace">S1</text>
-
-      <!-- tap S2 (garganta, D2) -->
-      <line x1="240" y1="145" x2="240" y2="45" stroke="#1A1A1C" stroke-width="2.5"/>
-      <rect x="210" y="14" width="60" height="32" rx="6" fill="#0E6A8A" stroke="#1A1A1C" stroke-width="2"/>
-      <text x="240" y="35" text-anchor="middle" font-size="15" fill="#F5F5F0" font-weight="bold" font-family="monospace">S2</text>
-
-      <!-- cota D1 (entrada) -->
-      <line x1="30" y1="255" x2="160" y2="255" stroke="#1A1A1C" stroke-width="1.2"/>
-      <line x1="30" y1="248" x2="30" y2="262" stroke="#1A1A1C" stroke-width="1.2"/>
-      <line x1="160" y1="248" x2="160" y2="262" stroke="#1A1A1C" stroke-width="1.2"/>
-      <text x="95" y="275" text-anchor="middle" font-size="15" fill="#1A1A1C" font-weight="bold" font-family="monospace">D1 = 10mm</text>
-
-      <!-- cota D2 (garganta) -->
-      <line x1="220" y1="185" x2="260" y2="185" stroke="#1A1A1C" stroke-width="1.2"/>
-      <line x1="220" y1="178" x2="220" y2="192" stroke="#1A1A1C" stroke-width="1.2"/>
-      <line x1="260" y1="178" x2="260" y2="192" stroke="#1A1A1C" stroke-width="1.2"/>
-      <text x="240" y="300" text-anchor="middle" font-size="15" fill="#1A1A1C" font-weight="bold" font-family="monospace">D2 = 3mm</text>
-
-      <!-- rotulos entrada/saida -->
-      <text x="35" y="80" font-size="12" fill="#8A8F98" font-family="monospace">entrada</text>
-      <text x="400" y="80" font-size="12" fill="#8A8F98" font-family="monospace">saída</text>
-    </svg>
-    <div class="sim-note">
-      S1 mede a pressão na entrada (Ø10mm); S2 mede na garganta, o ponto mais
-      estreito do Venturi. A diferença entre as duas leituras (ΔP = S1−S2) é o
-      que alimenta o cálculo de vazão.
-    </div>
-  </div>
-
-  </div>
-
-  <div class="simulator-card" style="max-width:1400px;">
-    <div class="simulator-title">Monitor de Respiração do Paciente</div>
-    <canvas id="chartRespiracao" width="1200" height="260"></canvas>
-    <div class="chart-caption">
-      <strong>O que esse gráfico mostra:</strong> a pressão em S2 (cavidade do paciente) oscilando
-      com a respiração — o diafragma comprime e relaxa a cavidade a cada ciclo, criando essa onda.
-      Repare que o ritmo <em>não é perfeitamente regular</em>: cada respiração tem um período e uma
-      profundidade levemente diferentes da anterior, como numa pessoa de verdade.
     </div>
   </div>
 
@@ -512,8 +380,6 @@ class Gauge{
     this.target  = cfg.min;   // valor alvo (vindo do BLE)
     this.mode = 'startup';    // 'startup' | 'idle' | 'live'
     this.startTime = null;
-    this.semLeitura = false; // true = sensor com erro (NaN recebido) - agulha
-                              // congela no ultimo valor bom, chip mostra "--.-"
   }
 
   draw(value, statusLabel){
@@ -580,9 +446,6 @@ class Gauge{
     ctx.fillText(statusLabel, cx, cy - S*0.20);
 
     // ponteiro (cauda curta, para nunca alcançar o display digital abaixo do centro)
-    // em erro (semLeitura), a agulha fica esmaecida no ultimo valor bom - nao
-    // "mente" mostrando um numero, mas tambem nao some do painel
-    if(this.semLeitura) ctx.globalAlpha = 0.28;
     const ang = valueToAngleRad(value,cfg);
     const tipR = S*0.41, tailR = S*0.06, halfW = S*0.022;
     const perp = ang + Math.PI/2;
@@ -598,7 +461,6 @@ class Gauge{
     // hub
     ctx.beginPath(); ctx.arc(cx,cy,S*0.028,0,7); ctx.fillStyle = cssVar('--hub-ring'); ctx.fill();
     ctx.beginPath(); ctx.arc(cx,cy,S*0.018,0,7); ctx.fillStyle = cssVar('--hub'); ctx.fill();
-    ctx.globalAlpha = 1;
 
     // chip digital (desenhado por cima do ponteiro de propósito — nunca fica "colado")
     const chipW = S*0.24, chipH=S*0.075;
@@ -610,9 +472,9 @@ class Gauge{
     ctx.font = `bold ${Math.round(S*0.06)}px DSEG7, monospace`;
     ctx.fillStyle = 'rgba(245,245,240,0.12)';
     ctx.fillText('88.8', cx, chipY + chipH/2 + S*0.002);
-    // valor real (ou "--.-" quando o sensor esta sem leitura valida)
-    ctx.fillStyle = this.semLeitura ? 'rgba(245,245,240,0.45)' : '#F5F5F0';
-    ctx.fillText(this.semLeitura ? '--.-' : value.toFixed(1), cx, chipY + chipH/2 + S*0.002);
+    // valor real
+    ctx.fillStyle = '#F5F5F0';
+    ctx.fillText(value.toFixed(1), cx, chipY + chipH/2 + S*0.002);
   }
 }
 
@@ -667,7 +529,7 @@ function frame(ts){
       g.draw(g.display, anyDataReceived ? 'DESCONECTADO' : 'AGUARDANDO DADOS');
     } else { // live
       g.display += (g.target - g.display) * 0.25; // suavização — mantém fluidez mesmo com pacotes BLE espaçados
-      g.draw(g.display, g.semLeitura ? 'SEM LEITURA' : 'AO VIVO');
+      g.draw(g.display, 'AO VIVO');
     }
   });
   requestAnimationFrame(frame);
@@ -703,11 +565,6 @@ async function connectBLE(){
     connectBtn.textContent = 'Desconectar';
     connectBtn.classList.add('disconnect');
     connectBtn.onclick = disconnectBLE;
-
-    // reinicia o nível do cilindro cheio a cada nova conexão
-    gasConsumidoKg = 0;
-    atualizarNivelCilindro();
-    reiniciarParticulasFluxo();
   }catch(err){
     console.error(err);
     if(err.name !== 'NotFoundError'){ alert('Falha ao conectar: ' + err.message); }
@@ -725,12 +582,6 @@ function onDisconnected(){
   connectBtn.textContent = 'Conectar';
   connectBtn.classList.remove('disconnect');
   connectBtn.onclick = connectBLE;
-
-  // apaga o indicador de nível ao desconectar (sem dado real, não mostra nada)
-  ledVerdeEl.classList.remove('lit');
-  ledAmareloEl.classList.remove('lit');
-  ledVermelhoEl.classList.remove('lit');
-  nivelPercentEl.textContent = '--%';
 }
 
 function onData(event){
@@ -744,39 +595,14 @@ function onData(event){
   const sensorHz    = dv.getFloat32(20, true);
   const tempVenturi = dv.getFloat32(24, true);
 
-  // NaN = sensor com erro nesse pacote (combinado no protocolo). Importante:
-  // NUNCA jogar NaN direto em g.target - a suavização (display += (target-display)*0.25)
-  // propagaria NaN pra sempre e a agulha nunca mais se recuperaria, mesmo
-  // depois do sensor voltar a funcionar. Por isso: em erro, so marca
-  // semLeitura e mantém o último target válido; a agulha fica congelada e
-  // esmaecida (ver Gauge.draw) até a próxima leitura boa.
-  if(Number.isNaN(p1)){
-    gaugeSensor1.semLeitura = true;
-  } else {
-    gaugeSensor1.semLeitura = false;
-    gaugeSensor1.target = Math.max(gaugeSensor1.cfg.min, Math.min(gaugeSensor1.cfg.max, p1));
-  }
-
-  if(Number.isNaN(p2)){
-    gaugeSensor2.semLeitura = true;
-  } else {
-    gaugeSensor2.semLeitura = false;
-    gaugeSensor2.target = Math.max(gaugeSensor2.cfg.min, Math.min(gaugeSensor2.cfg.max, p2));
-  }
-
-  // vazão: o firmware já propaga NaN aqui se p1 OU p2 estiverem inválidos
-  if(Number.isNaN(vazao)){
-    gaugeVazao.semLeitura = true;
-  } else {
-    gaugeVazao.semLeitura = false;
-    gaugeVazao.target = Math.max(gaugeVazao.cfg.min, Math.min(gaugeVazao.cfg.max, vazao));
-  }
+  gaugeSensor1.target = Math.max(gaugeSensor1.cfg.min, Math.min(gaugeSensor1.cfg.max, p1));
+  gaugeSensor2.target = Math.max(gaugeSensor2.cfg.min, Math.min(gaugeSensor2.cfg.max, p2));
+  gaugeVazao.target   = Math.max(gaugeVazao.cfg.min,   Math.min(gaugeVazao.cfg.max, vazao));
 
   document.getElementById('infoVoltage').textContent     = tensao.toFixed(2) + ' V';
   document.getElementById('infoBleHz').textContent       = bleHz.toFixed(1) + ' Hz';
   document.getElementById('infoSensorHz').textContent    = sensorHz.toFixed(1) + ' Hz';
-  document.getElementById('infoTempVenturi').textContent = Number.isNaN(tempVenturi)
-    ? '-- °C' : tempVenturi.toFixed(1) + ' °C';
+  document.getElementById('infoTempVenturi').textContent = tempVenturi.toFixed(1) + ' °C';
 }
 
 /* ============ Simulador de temperatura (independente do BLE, roda no navegador) ============ */
@@ -974,13 +800,6 @@ const ledVerdeEl      = document.getElementById('ledVerde');
 const nivelPercentEl  = document.getElementById('nivelPercentual');
 
 function atualizarNivelCilindro(){
-  if(!liveConnected){
-    ledVerdeEl.classList.remove('lit');
-    ledAmareloEl.classList.remove('lit');
-    ledVermelhoEl.classList.remove('lit');
-    nivelPercentEl.textContent = '--%';
-    return;
-  }
   const vazaoLmin    = gaugeVazao.display;                 // vazão real instantânea (L/min)
   const capacidadeKg = parseFloat(simMassaEl.value);
   const litrosNesteSeg = vazaoLmin / 60;                   // L/min -> L/s (tick de 1s)
@@ -997,115 +816,6 @@ function atualizarNivelCilindro(){
 }
 setInterval(atualizarNivelCilindro, 1000);
 atualizarNivelCilindro();
-
-/* ============ Animação das partículas de fluxo no diagrama do Venturi ============
-   Velocidade base proporcional à vazão real (gaugeVazao.display). Além disso,
-   as partículas aceleram visualmente ao passar pela garganta do tubo (x entre
-   160 e 320 no SVG) — o mesmo efeito físico real do Venturi: a velocidade
-   aumenta onde a área da seção transversal diminui (equação da continuidade). */
-const fluxoParticulasEls = document.querySelectorAll('.fluxo-particula');
-const fluxoGrupoEl = document.getElementById('fluxoParticulas');
-const FLUXO_X_MIN = 40, FLUXO_X_MAX = 440;
-const FLUXO_X_INICIAIS = [60, 140, 220, 300, 380];   // posições de reinício (espaçadas)
-const GARGANTA_X_MIN = 160, GARGANTA_X_MAX = 320, GARGANTA_PICO_X = 240;
-const FLUXO_DT_MAX_SEG = 0.1;   // limita o passo de tempo (evita saltos após aba em 2º plano)
-
-function multiplicadorLocal(x){
-  // 1.0 fora da região de estrangulamento, sobe até ~2.8x perto da garganta (x=240)
-  if (x < GARGANTA_X_MIN || x > GARGANTA_X_MAX) return 1.0;
-  const dist = Math.abs(x - GARGANTA_PICO_X);
-  const meiaFaixa = (GARGANTA_X_MAX - GARGANTA_X_MIN) / 2;
-  const frac = 1 - (dist / meiaFaixa);           // 0 nas bordas, 1 no centro
-  return 1.0 + frac * 1.8;
-}
-
-function reiniciarParticulasFluxo(){
-  fluxoParticulasEls.forEach((el, i) => el.setAttribute('cx', FLUXO_X_INICIAIS[i]));
-}
-
-let fluxoUltimoTs = null;
-function animarFluxo(ts){
-  if (fluxoUltimoTs === null) fluxoUltimoTs = ts;
-  let dtSeg = (ts - fluxoUltimoTs) / 1000;
-  dtSeg = Math.min(dtSeg, FLUXO_DT_MAX_SEG);   // nunca deixa o passo disparar (aba em 2º plano etc.)
-  fluxoUltimoTs = ts;
-
-  fluxoGrupoEl.style.opacity = liveConnected ? '1' : '0';
-
-  if (liveConnected) {
-    const vazao = gaugeVazao.display;                     // 0-50 L/min
-    const velBasePxSeg = 18 + vazao * 4.2;                 // parado (quase) a 0, ~228px/s a 50L/min
-
-    fluxoParticulasEls.forEach(el => {
-      let x = parseFloat(el.getAttribute('cx'));
-      x += velBasePxSeg * multiplicadorLocal(x) * dtSeg;
-      if (x > FLUXO_X_MAX) x = FLUXO_X_MIN;                 // volta pro início (loop)
-      el.setAttribute('cx', x.toFixed(1));
-    });
-  }
-
-  requestAnimationFrame(animarFluxo);
-}
-requestAnimationFrame(animarFluxo);
-
-/* ============ Monitor de respiração: onda ao vivo de P2 (cavidade) ============
-   Mostra os últimos ~16s do valor de S2 recebido via BLE — a oscilação
-   respiratória (adicionada no firmware) aparece aqui como uma onda, com
-   período e profundidade levemente variáveis entre respirações. */
-const RESP_JANELA_S = 16;
-const respHistorico = [];   // {t, valor}
-
-function registrarAmostraRespiracao(p2){
-  const agora = performance.now()/1000;
-  respHistorico.push({t: agora, v: p2});
-  const limite = agora - RESP_JANELA_S;
-  while (respHistorico.length && respHistorico[0].t < limite) respHistorico.shift();
-}
-
-function desenharMonitorRespiracao(){
-  const canvas = document.getElementById('chartRespiracao');
-  const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
-  ctx.clearRect(0,0,W,H);
-
-  const padL=50, padR=16, padT=16, padB=16;
-  const plotW = W-padL-padR, plotH = H-padT-padB;
-  const agora = performance.now()/1000;
-
-  ctx.strokeStyle='rgba(255,255,255,0.10)'; ctx.lineWidth=1;
-  ctx.font='11px monospace'; ctx.fillStyle=cssVar('--text-dim');
-  const nY=4;
-  let vMin=0, vMax=30;
-  if (respHistorico.length>1){
-    const vs = respHistorico.map(p=>p.v);
-    vMin = Math.min(...vs)-1; vMax = Math.max(...vs)+1;
-  }
-  for(let i=0;i<=nY;i++){
-    const val = vMin + (vMax-vMin)*i/nY;
-    const yy = padT + (1-(val-vMin)/(vMax-vMin))*plotH;
-    ctx.beginPath(); ctx.moveTo(padL,yy); ctx.lineTo(W-padR,yy); ctx.stroke();
-    ctx.fillText(val.toFixed(0), 6, yy+4);
-  }
-
-  if (respHistorico.length > 1){
-    ctx.beginPath();
-    ctx.strokeStyle = cssVar('--accent'); ctx.lineWidth=2.2;
-    respHistorico.forEach((p,i)=>{
-      const x = padL + (1 - (agora-p.t)/RESP_JANELA_S) * plotW;
-      const y = padT + (1-(p.v-vMin)/(vMax-vMin))*plotH;
-      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-    });
-    ctx.stroke();
-  }
-}
-
-function loopMonitorRespiracao(){
-  if (liveConnected) registrarAmostraRespiracao(gaugeSensor2.display);
-  desenharMonitorRespiracao();
-  requestAnimationFrame(loopMonitorRespiracao);
-}
-requestAnimationFrame(loopMonitorRespiracao);
-
 
 connectBtn.onclick = connectBLE;
 
