@@ -1,16 +1,8 @@
 <!DOCTYPE html>
 <!--
   Painel BLE - Pressão S1/S2 & Vazão
-  Rev: r8
+  Rev: r6
   Changelog:
-    r8 - Adicionado bargraph de 3 LEDs (vermelho/amarelo/verde) indicando
-         nível do cilindro, calculado por integração real da vazão ao
-         longo do tempo (massa consumida = ∫vazão dt, convertida via
-         densidade do gás), usando a capacidade do cilindro (kg) do
-         simulador de resfriamento como referência de escala cheia.
-    r7 - Vazão do simulador de resfriamento agora usa média móvel (em vez do
-         valor instantâneo), evitando que picos aleatórios do firmware de
-         teste (que muda a cada 0.5s) distorçam a projeção de 60 minutos.
     r6 - Vazão de uso no simulador de resfriamento passou a refletir o
          manômetro de Vazão ao vivo (BLE), em vez de slider manual.
     r5 - Chip de temperatura do Venturi + simulador de estimativa de
@@ -101,30 +93,6 @@
   }
   canvas{ width:100%; height:auto; display:block; }
 
-  .led-tower{
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:14px; padding:18px 20px; background:var(--panel);
-    border:1px solid rgba(255,255,255,0.12); border-radius:12px;
-    align-self:center; min-width:110px;
-  }
-  .led-title{
-    font-size:11px; font-weight:700; letter-spacing:0.5px; color:var(--text-dim);
-    text-align:center; line-height:1.4;
-  }
-  .led-circle{
-    width:34px; height:34px; border-radius:50%;
-    background:rgba(255,255,255,0.08);
-    border:2px solid rgba(255,255,255,0.15);
-    transition:background .3s, box-shadow .3s, border-color .3s;
-  }
-  .led-circle[data-cor="red"].lit{    background:var(--red);    border-color:var(--red);    box-shadow:0 0 14px var(--red); }
-  .led-circle[data-cor="yellow"].lit{ background:var(--yellow); border-color:var(--yellow); box-shadow:0 0 14px var(--yellow); }
-  .led-circle[data-cor="green"].lit{  background:var(--green);  border-color:var(--green);  box-shadow:0 0 14px var(--green); }
-  .led-percent{
-    font-family:'DSEG7', monospace; font-size:16px; font-weight:bold; color:#F5F5F0;
-    margin-top:4px;
-  }
-
   .infobar{
     display:flex; flex-wrap:wrap; justify-content:center; gap:16px;
     max-width:1000px; margin:0 auto; padding:4px 24px 28px;
@@ -198,13 +166,6 @@
     <div class="gauge-card"><canvas id="gaugeSensor1" width="720" height="720"></canvas></div>
     <div class="gauge-card"><canvas id="gaugeSensor2" width="720" height="720"></canvas></div>
     <div class="gauge-card"><canvas id="gaugeVazao" width="720" height="720"></canvas></div>
-    <div class="led-tower">
-      <div class="led-title">NÍVEL<br>CILINDRO</div>
-      <div class="led-circle" id="ledVermelho" data-cor="red"></div>
-      <div class="led-circle" id="ledAmarelo" data-cor="yellow"></div>
-      <div class="led-circle" id="ledVerde" data-cor="green"></div>
-      <div class="led-percent" id="nivelPercentual">--%</div>
-    </div>
   </div>
 
   <div class="infobar">
@@ -290,13 +251,12 @@
       <div class="sim-note">
         Modelo de capacitância térmica simplificado (balanço de energia no CO₂ líquido):
         <code>m·cp·dT/dt = h·A·(T_amb−T) − ṁ·L(T)</code>, com propriedades reais do CO₂
-        (calor latente e calor específico, via equação de estado). A vazão usada é uma
-        <strong>média móvel</strong> do manômetro ao vivo (evita que picos aleatórios
-        instantâneos do firmware de teste distorçam a projeção de 60 minutos). A área de
-        troca térmica é recalculada a partir da capacidade escolhida (proporção
-        altura/diâmetro fixa, densidade média do líquido ~800 kg/m³).
-        <strong>Suposições assumidas</strong>: coeficiente de convecção natural
-        h≈8 W/m²K, massa de líquido considerada constante durante a simulação.
+        (calor latente e calor específico, via equação de estado). A área de troca
+        térmica é recalculada a partir da capacidade escolhida (proporção altura/diâmetro
+        fixa, densidade média do líquido ~800 kg/m³). <strong>Suposições assumidas</strong>:
+        coeficiente de convecção natural h≈8 W/m²K, massa de líquido considerada
+        constante durante a simulação. Ajustar se os dados reais do seu cilindro forem
+        diferentes.
       </div>
     </div>
   </div>
@@ -757,17 +717,11 @@ const simMassaNumEl     = document.getElementById('simMassaCilindroNum');
 const simTempEstavelEl  = document.getElementById('simTempEstavel');
 const simTempoEstavelEl = document.getElementById('simTempoEstavel');
 
-// média móvel da vazão — evita que picos aleatórios instantâneos (ex: firmware
-// de teste, que sorteia valores a cada 0.5s) distorçam a projeção de 60 minutos
-let vazaoMediaMovel = 0;
-const VAZAO_SUAVIZACAO = 0.03; // quanto menor, mais lenta/estável a média
-
 function atualizarResfriamento(){
-  vazaoMediaMovel += (gaugeVazao.display - vazaoMediaMovel) * VAZAO_SUAVIZACAO;
-  const vazao = vazaoMediaMovel;
+  const vazao = gaugeVazao.display;   // vazão ao vivo (BLE) ou do autoteste/idle
   const tAmb  = parseFloat(simTempAmbEl.value);
   const massa = parseFloat(simMassaEl.value);
-  simVazaoAtualEl.textContent = vazao.toFixed(1) + ' L/min (média)';
+  simVazaoAtualEl.textContent = vazao.toFixed(0) + ' L/min';
   const { pontos, estabilizou } = simularResfriamentoCilindro(vazao, tAmb, massa);
   desenharGraficoResfriamento(pontos, estabilizou);
   simTempEstavelEl.textContent = pontos[pontos.length-1].T.toFixed(1) + ' °C';
@@ -787,35 +741,6 @@ simMassaNumEl.addEventListener('input', ()=>{
 atualizarResfriamento();
 // mantém o gráfico sincronizado com o valor ao vivo do manômetro de vazão
 setInterval(atualizarResfriamento, 1000);
-
-/* ============ Nível do cilindro: integração real da vazão ao longo do tempo ============
-   Consome massa de CO2 conforme a vazão medida (não é simulado à parte — soma de verdade
-   o volume que passou pelo Venturi, convertido em massa via a densidade do gás na saída).
-   Usa a mesma capacidade do cilindro (kg) configurada no simulador de resfriamento acima
-   como referência de escala cheia. */
-let gasConsumidoKg = 0;
-const ledVermelhoEl   = document.getElementById('ledVermelho');
-const ledAmareloEl    = document.getElementById('ledAmarelo');
-const ledVerdeEl      = document.getElementById('ledVerde');
-const nivelPercentEl  = document.getElementById('nivelPercentual');
-
-function atualizarNivelCilindro(){
-  const vazaoLmin    = gaugeVazao.display;                 // vazão real instantânea (L/min)
-  const capacidadeKg = parseFloat(simMassaEl.value);
-  const litrosNesteSeg = vazaoLmin / 60;                   // L/min -> L/s (tick de 1s)
-  const kgNesteSeg      = (litrosNesteSeg / 1000) * RHO_GAS_SAIDA;
-  gasConsumidoKg = Math.min(capacidadeKg, gasConsumidoKg + kgNesteSeg);
-
-  const restanteKg   = Math.max(0, capacidadeKg - gasConsumidoKg);
-  const percentual   = (restanteKg / capacidadeKg) * 100;
-
-  ledVerdeEl.classList.toggle('lit',    percentual > 60);
-  ledAmareloEl.classList.toggle('lit',  percentual <= 60 && percentual > 20);
-  ledVermelhoEl.classList.toggle('lit', percentual <= 20);
-  nivelPercentEl.textContent = percentual.toFixed(0) + '%';
-}
-setInterval(atualizarNivelCilindro, 1000);
-atualizarNivelCilindro();
 
 connectBtn.onclick = connectBLE;
 
